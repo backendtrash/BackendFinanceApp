@@ -108,3 +108,23 @@ async def delete_goal(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Goal {goal_id} not found",
         )
+
+
+# ── Delete All Goals ──────────────────────────────────────────────────────
+@router.delete(
+    "/",
+    status_code=status.HTTP_200_OK,
+    summary="Delete all goals for the current user",
+)
+async def delete_all_goals(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """
+    Deletes ALL goals belonging to the authenticated user.
+
+    Contributions already made are kept. They are real expenses — the money
+    did leave the account, and removing the goal does not give it back.
+    Irreversible.
+    """
+    deleted = await service.delete_all_goals(user_id=current_user.user_id)
+    return {"deleted": deleted, "message": f"Deleted {deleted} goals"}

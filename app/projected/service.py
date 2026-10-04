@@ -238,3 +238,24 @@ async def get_monthly_projection(
         "year":  year,
         "month": month,
     }
+
+
+async def delete_all_projected_costs(user_id: str) -> int:
+    """
+    Deletes every projected cost belonging to this user.
+
+    Safe in isolation: projections are forecast only and never produced a
+    transaction. Expenses that were paid against one keep their row; the
+    foreign key sets projected_cost_id to null.
+    """
+    result = (
+        supabase_admin
+        .table("projected_costs")
+        .delete()
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    deleted = len(result.data or [])
+    logger.info(f"Deleted {deleted} projected costs for user {user_id}")
+    return deleted

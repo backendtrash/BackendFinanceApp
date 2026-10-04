@@ -18,6 +18,8 @@ async def run_recurring_rules() -> None:
     logger.info("⏰ Scheduler: processing due recurring rules...")
     try:
         from app.recurring.service import process_due_rules
+        # No user_id: the nightly job is the one caller that legitimately
+        # processes every user's rules.
         result = await process_due_rules()
         logger.info(
             f"✅ Scheduler: processed {result['processed']} rules, "

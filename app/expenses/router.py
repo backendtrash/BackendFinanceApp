@@ -342,19 +342,12 @@ async def delete_all_expenses(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
-    Deletes ALL expenses belonging to the authenticated user.
-    Returns count of deleted rows.
-    This operation is irreversible.
+    Deletes ALL expense records belonging to the authenticated user.
+
+    Irreversible.
     """
-    result = (
-        supabase_admin
-        .table("expenses")
-        .delete()
-        .eq("user_id", current_user.user_id)
-        .execute()
-    )
-    count = len(result.data) if result.data else 0
-    return {"deleted": count, "message": f"Deleted {count} expenses"}
+    deleted = await service.delete_all_expenses(user_id=current_user.user_id)
+    return {"deleted": deleted, "message": f"Deleted {deleted} expenses"}
 
 # ── Split Expense ─────────────────────────────────────────────────────────
 from pydantic import BaseModel as PydanticBase
