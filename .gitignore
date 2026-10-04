@@ -1,0 +1,25 @@
+# Virtual environment
+venv/
+.venv/
+
+# Environment secrets — NEVER commit these
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
