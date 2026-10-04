@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="Budget Tracker REST API",
+    description="BackendFinance REST API",
 
     # Disable docs in production — avoids exposing API structure
     docs_url="/docs" if settings.debug else None,
