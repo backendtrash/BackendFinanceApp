@@ -28,3 +28,11 @@ apscheduler==3.10.4
 
 # ── Rate Limiting ───────────────────────────────────────────────────────
 slowapi==0.1.9
+
+# ── Testing ───────────────────────────────────────────────────────────────
+# httpx is already pinned above and TestClient uses it. Do not move it to
+# 0.28+ without also moving fastapi: starlette 0.37, which fastapi 0.111
+# requires, calls TestClient with the app= argument that httpx 0.28 removed.
+pytest==8.3.3
+pytest-asyncio==0.24.0
+pytest-mock==3.14.0
