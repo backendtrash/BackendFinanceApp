@@ -12,7 +12,6 @@ from app.recurring.schemas import (
     ProcessRecurringResponse,
 )
 from app.recurring import service
-from app.database import supabase_admin
 
 # ── Logger ────────────────────────────────────────────────────────────────
 logger = logging.getLogger(__name__)
@@ -33,14 +32,21 @@ async def process_due_rules(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
-    Manually triggers processing of all due recurring rules.
-    In production this runs automatically at midnight daily.
-    Useful for testing and catching up after downtime.
-    Any authenticated user can trigger this safely —
-    each rule is scoped to its owner via user_id.
+    Processes the caller's own due recurring rules.
+
+    In production the nightly scheduler does this for everyone; this
+    endpoint exists for catching up after downtime and for testing.
+
+    Scoped to the caller on purpose. It used to process every user's rules,
+    on the reasoning that each rule is written against its own user_id and
+    so nothing could leak. That is true of the rows, but it still let any
+    authenticated user drive the whole table's scheduling on demand — and
+    repeatedly, which was the multiplier on the duplicate-transaction
+    problem this change fixes. There is no reason one user needs to advance
+    another user's rules.
     """
     try:
-        return await service.process_due_rules()
+        return await service.process_due_rules(user_id=current_user.user_id)
     except Exception as e:
         logger.error(f"Failed to process recurring rules: {e}")
         raise HTTPException(
@@ -208,15 +214,11 @@ async def delete_all_rules(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
-    Deletes ALL recurring rules belonging to the authenticated user.
-    Previously generated transactions are preserved (recurring_rule_id → NULL).
+    Deletes ALL recurring rule records belonging to the authenticated user.
+
+    Irreversible.
+
+    Transactions already generated are kept — only the rules go.
     """
-    result = (
-        supabase_admin
-        .table("recurring_rules")
-        .delete()
-        .eq("user_id", current_user.user_id)
-        .execute()
-    )
-    count = len(result.data) if result.data else 0
-    return {"deleted": count, "message": f"Deleted {count} rules"}
+    deleted = await service.delete_all_rules(user_id=current_user.user_id)
+    return {"deleted": deleted, "message": f"Deleted {deleted} rules"}

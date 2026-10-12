@@ -19,10 +19,6 @@ class ExpenseCreate(BaseModel):
     notes:             Optional[str] = None
     is_recurring:      bool = False
     projected_cost_id: Optional[UUID] = None
-    # Links a set-aside to the fund it funds. Purely additive metadata,
-    # exactly like projected_cost_id — it never changes what this expense
-    # means to any balance calculation.
-    sinking_fund_id:   Optional[UUID] = None
 
     @field_validator("amount")
     @classmethod
@@ -121,7 +117,6 @@ class ExpenseResponse(BaseModel):
     is_recurring:      bool
     recurring_rule_id: Optional[UUID]
     projected_cost_id: Optional[UUID] = None
-    sinking_fund_id:   Optional[UUID] = None
     created_at:        str
     updated_at:        str
 

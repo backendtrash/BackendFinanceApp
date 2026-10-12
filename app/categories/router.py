@@ -156,16 +156,54 @@ async def delete_category(
 ):
     """
     Deletes a user-owned category.
-    Returns 404 if not found or trying to delete a system category.
-    Linked expenses/earnings will have category_id set to NULL.
+
+    404 if it does not exist, or is a system category.
+    409 if movements still reference it, with the counts per table so the
+    client can tell the user what is in the way.
     """
-    deleted = await service.delete_category(
-        category_id=category_id,
-        user_id=current_user.user_id,
-    )
+    try:
+        deleted = await service.delete_category(
+            category_id=category_id,
+            user_id=current_user.user_id,
+        )
+    except service.CategoryInUse as in_use:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": (
+                    "This category still has movements. Reassign or delete "
+                    "them before removing the category."
+                ),
+                "references": in_use.counts,
+            },
+        )
 
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Category {category_id} not found or is a system category",
         )
+
+
+# ── Delete All Custom Categories ──────────────────────────────────────────
+@router.delete(
+    "/",
+    status_code=status.HTTP_200_OK,
+    summary="Delete all custom categories for the current user",
+)
+async def delete_all_categories(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """
+    Deletes the authenticated user's own categories.
+
+    System categories are never removed. Categories still referenced by
+    movements are skipped rather than deleted, for the same reason the
+    single delete returns 409 — removing one would silently rewrite the
+    history filed under it. The response lists what was skipped and how
+    many records are holding each one.
+
+    In a full reset, call this last: once movements are gone nothing
+    references the categories and they all go.
+    """
+    return await service.delete_all_categories(user_id=current_user.user_id)

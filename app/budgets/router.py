@@ -222,3 +222,21 @@ async def delete_budget(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Budget {budget_id} not found",
         )
+
+
+# ── Delete All Budgets ────────────────────────────────────────────────────
+@router.delete(
+    "/",
+    status_code=status.HTTP_200_OK,
+    summary="Delete all budgets for the current user",
+)
+async def delete_all_budgets(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """
+    Deletes ALL budgets belonging to the authenticated user.
+
+    Alert history goes with them, by cascade. Irreversible.
+    """
+    deleted = await service.delete_all_budgets(user_id=current_user.user_id)
+    return {"deleted": deleted, "message": f"Deleted {deleted} budgets"}

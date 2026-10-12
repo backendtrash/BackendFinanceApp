@@ -98,3 +98,23 @@ async def delete_projected_cost(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Projected cost not found",
         )
+
+
+# ── Delete All Projected Costs ────────────────────────────────────────────
+@router.delete(
+    "/",
+    status_code=status.HTTP_200_OK,
+    summary="Delete all projected costs for the current user",
+)
+async def delete_all_projected_costs(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """
+    Deletes ALL projected costs belonging to the authenticated user.
+
+    Forecast data only — no real transaction is affected. Irreversible.
+    """
+    deleted = await service.delete_all_projected_costs(
+        user_id=current_user.user_id
+    )
+    return {"deleted": deleted, "message": f"Deleted {deleted} projected costs"}

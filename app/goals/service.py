@@ -667,3 +667,26 @@ async def delete_goal(goal_id: UUID, user_id: str) -> bool:
         ).execute()
 
     return True
+
+
+async def delete_all_goals(user_id: str) -> int:
+    """
+    Deletes every goal belonging to this user and returns the count.
+
+    The auto-created savings categories are deliberately left behind, along
+    with the contributions filed under them. Those contributions are real
+    expenses: money actually left the account, and deleting the goal does
+    not undo that. Removing them here would silently change the user's
+    spending history and net balance.
+    """
+    result = (
+        supabase_admin
+        .table("goals")
+        .delete()
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    deleted = len(result.data or [])
+    logger.info(f"Deleted {deleted} goals for user {user_id}")
+    return deleted

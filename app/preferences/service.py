@@ -64,3 +64,29 @@ async def update_preferences(user_id: str, data: object) -> dict:
         raise RuntimeError("Failed to update preferences")
 
     return result.data[0]
+
+
+async def reset_preferences(user_id: str) -> dict:
+    """
+    Returns this user's preferences to their defaults.
+
+    A reset rather than a delete, on purpose. Every read path assumes a row
+    exists and creates one if it does not, and the write path upserts on
+    user_id. Deleting the row would work but leaves the next read to
+    recreate it, so writing the defaults straight back is the same outcome
+    with one fewer moving part — and it keeps the row id stable.
+    """
+    payload = {"user_id": user_id, **DEFAULT_PREFERENCES}
+
+    result = (
+        supabase_admin
+        .table("user_preferences")
+        .upsert(payload, on_conflict="user_id")
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to reset preferences")
+
+    logger.info(f"Reset preferences to defaults for user {user_id}")
+    return result.data[0]

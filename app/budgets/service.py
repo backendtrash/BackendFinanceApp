@@ -379,3 +379,25 @@ async def check_all_budgets_after_expense(user_id: str) -> None:
             user_id=user_id,
             budget=budget,
         )
+
+
+async def delete_all_budgets(user_id: str) -> int:
+    """
+    Deletes every budget belonging to this user and returns the count.
+
+    Alert history goes with them. budget_alerts.budget_id cascades, which
+    is the one place in this schema where cascade is right: an alert says
+    "this budget crossed its threshold", so it has no meaning once the
+    budget is gone and it is not financial history worth keeping.
+    """
+    result = (
+        supabase_admin
+        .table("budgets")
+        .delete()
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    deleted = len(result.data or [])
+    logger.info(f"Deleted {deleted} budgets for user {user_id}")
+    return deleted

@@ -274,3 +274,22 @@ async def get_weekly_summary(
             for cat_id, v in category_totals.items()
         ],
     }
+
+
+async def delete_all_earnings(user_id: str) -> int:
+    """
+    Deletes every earning belonging to this user and returns the count.
+
+    Part of the full data reset on the Settings screen.
+    """
+    result = (
+        supabase_admin
+        .table("earnings")
+        .delete()
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    deleted = len(result.data or [])
+    logger.info(f"Deleted {deleted} earnings for user {user_id}")
+    return deleted

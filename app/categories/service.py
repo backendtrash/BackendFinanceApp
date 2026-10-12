@@ -147,16 +147,92 @@ async def update_category(
     return result.data[0]
 
 
+class CategoryInUse(Exception):
+    """
+    Raised instead of deleting a category that still has movements.
+
+    Carries the per-table counts so the API can tell the user what is in
+    the way rather than just refusing.
+    """
+
+    def __init__(self, counts: dict[str, int]) -> None:
+        self.counts = counts
+        total = sum(counts.values())
+        super().__init__(f"category still referenced by {total} records")
+
+
+# Every table that points at a category, and the column it points with.
+# goals uses savings_category_id rather than category_id, which is easy to
+# miss — a goal whose savings category vanished silently stops tracking
+# progress, because contributions are found through that category.
+CATEGORY_REFERENCES = [
+    ("expenses",        "category_id"),
+    ("earnings",        "category_id"),
+    ("budgets",         "category_id"),
+    ("recurring_rules", "category_id"),
+    ("projected_costs", "category_id"),
+    ("goals",           "savings_category_id"),
+]
+
+
+async def count_category_references(category_id: UUID, user_id: str) -> dict[str, int]:
+    """
+    Counts the rows that would be orphaned by deleting this category.
+
+    Scoped to the owner as well as the category. Without the user_id filter
+    one user's rows could block another user's delete, which is both a leak
+    of the fact those rows exist and a denial of service.
+    """
+    counts: dict[str, int] = {}
+
+    for table, column in CATEGORY_REFERENCES:
+        result = (
+            supabase_admin
+            .table(table)
+            .select("id")
+            .eq(column, str(category_id))
+            .eq("user_id", user_id)
+            .execute()
+        )
+        found = len(result.data or [])
+        if found:
+            counts[table] = found
+
+    return counts
+
+
 async def delete_category(
     category_id: UUID,
     user_id: str,
 ) -> bool:
     """
-    Deletes a user-owned category.
-    System categories cannot be deleted — .eq("user_id") prevents it.
-    Linked expenses/earnings keep their category_id as NULL
-    after deletion (ON DELETE SET NULL in schema).
+    Deletes a user-owned category, but only if nothing still uses it.
+
+    Raises CategoryInUse when movements reference it.
+
+    The schema says ON DELETE SET NULL, so the database would happily
+    accept this delete and quietly rewrite history around it:
+
+      - every past expense and earning in that category becomes
+        "Uncategorized", so previous months silently re-report
+      - a budget scoped to that category becomes a budget over ALL
+        categories, which changes what it measures without changing
+        anything the user can see
+      - a recurring rule keeps firing, now uncategorised, forever
+      - a goal loses the category its contributions are counted through,
+        so its progress resets to zero while the money stays spent
+
+    None of that is recoverable from the API, because the old category_id
+    is gone. Refusing the delete is the only honest option; the user can
+    reassign or remove the movements first.
+
+    System categories remain unreachable here: .eq("user_id") can never
+    match a row whose user_id is null.
     """
+    counts = await count_category_references(category_id, user_id)
+    if counts:
+        raise CategoryInUse(counts)
+
     result = (
         supabase_admin
         .table("categories")
@@ -168,3 +244,50 @@ async def delete_category(
     )
 
     return len(result.data) > 0
+
+
+async def delete_all_categories(user_id: str) -> dict:
+    """
+    Deletes the user's own categories, skipping any still in use.
+
+    Two things make this different from the other bulk deletes.
+
+    System categories are never touched: .eq("user_id") cannot match a row
+    whose user_id is null, so the shared defaults survive by construction.
+
+    And each category is checked for references first, for the same reason
+    the single delete refuses — ON DELETE SET NULL would quietly rewrite
+    history rather than fail. Categories still in use are reported back
+    instead of being removed, so the Settings screen can say what is left
+    and why.
+
+    The full reset therefore wipes movements first and categories last, at
+    which point nothing references them and everything goes.
+    """
+    owned = (
+        supabase_admin
+        .table("categories")
+        .select("id, name")
+        .eq("user_id", user_id)
+        .execute()
+    ).data or []
+
+    deleted = 0
+    skipped: dict[str, int] = {}
+
+    for category in owned:
+        counts = await count_category_references(category["id"], user_id)
+        if counts:
+            skipped[category["name"]] = sum(counts.values())
+            continue
+
+        supabase_admin.table("categories").delete().eq(
+            "id", category["id"]
+        ).eq("user_id", user_id).execute()
+        deleted += 1
+
+    logger.info(
+        f"Deleted {deleted} categories for user {user_id}, "
+        f"skipped {len(skipped)} still in use"
+    )
+    return {"deleted": deleted, "skipped": skipped}

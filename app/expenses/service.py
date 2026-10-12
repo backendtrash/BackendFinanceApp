@@ -75,10 +75,6 @@ async def create_expense(
     if data.projected_cost_id:
         payload["projected_cost_id"] = str(data.projected_cost_id)
 
-    # Link to the sinking fund this expense sets money aside for
-    if data.sinking_fund_id:
-        payload["sinking_fund_id"] = str(data.sinking_fund_id)
-
     result = (
         supabase_admin
         .table("expenses")
@@ -337,3 +333,22 @@ async def get_weekly_summary(
             for cat_id, v in category_totals.items()
         ],
     }
+
+
+async def delete_all_expenses(user_id: str) -> int:
+    """
+    Deletes every expense belonging to this user and returns the count.
+
+    Part of the full data reset on the Settings screen.
+    """
+    result = (
+        supabase_admin
+        .table("expenses")
+        .delete()
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    deleted = len(result.data or [])
+    logger.info(f"Deleted {deleted} expenses for user {user_id}")
+    return deleted

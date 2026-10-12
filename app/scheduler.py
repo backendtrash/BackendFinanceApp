@@ -18,6 +18,8 @@ async def run_recurring_rules() -> None:
     logger.info("⏰ Scheduler: processing due recurring rules...")
     try:
         from app.recurring.service import process_due_rules
+        # No user_id: the nightly job is the one caller that legitimately
+        # processes every user's rules.
         result = await process_due_rules()
         logger.info(
             f"✅ Scheduler: processed {result['processed']} rules, "
@@ -72,9 +74,8 @@ def setup_scheduler() -> AsyncIOScheduler:
       - check_budget_alerts:     daily at 08:00 (morning)
 
     Timezone: UTC — Railway servers run in UTC.
-    Your local time is UTC-6 (Mexico City).
-    Midnight UTC = 6pm Mexico time.
-    Adjust hour values if you prefer a different local time.
+    The deployment region is UTC-6, so the midnight job runs at 18:00
+    local the previous day. Adjust the hour values to shift that.
     """
     scheduler.add_job(
         run_recurring_rules,
