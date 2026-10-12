@@ -71,74 +71,64 @@ async def get_jwks() -> dict:
 
 async def decode_jwt(token: str) -> dict:
     """
-    Decodes and validates a Supabase JWT token.
+    Decodes and validates a Supabase JWT.
 
-    Supports both ES256 (newer Supabase projects) and HS256 (older).
-    ES256: verifies using public key from Supabase JWKS endpoint.
-    HS256: verifies using JWT secret from project settings.
+    ES256 only, verified against the public keys Supabase publishes at its
+    JWKS endpoint.
 
-    Flow:
-      1. Peek at token header to detect algorithm (no verification yet)
-      2. For ES256 → fetch JWKS → find matching key by kid → verify
-      3. For HS256 → verify using supabase_jwt_secret
-      4. Return decoded payload on success
-      5. Raise 401 on any validation failure
+    There used to be an HS256 branch here for older Supabase projects,
+    selected by reading the "alg" field out of the token's own header
+    before any signature had been checked. Two problems with that:
+
+      - the attacker picks the algorithm. Choosing which key to verify
+        with based on an unverified claim is algorithm confusion, and the
+        whole point of verification is that nothing in the token is
+        trusted until the signature holds.
+      - it required SUPABASE_JWT_SECRET to be configured even though this
+        project issues ES256, so a shared secret was carried in the
+        environment for a path that never ran.
+
+    The design approved at H2 specifies ES256 via JWKS. This now matches it.
+
+    Every failure here is a 401. Reading the header is inside the try block
+    on purpose: a token that is not three base64 segments raises JWTError
+    there, and when that call sat above the try it escaped as an unhandled
+    exception, turning any malformed token into a 500 on all 69 protected
+    endpoints.
     """
-    # Read token header without verifying to detect algorithm
-    unverified_header = jwt.get_unverified_header(token)
-    algorithm = unverified_header.get("alg", "HS256")
-
     try:
-        if algorithm == "ES256":
-            # ── ES256 verification ────────────────────────────────────────
-            # Fetch public keys from Supabase JWKS endpoint
-            jwks = await get_jwks()
+        # Not trusted — only used to find which published key to verify
+        # against. The signature check below is what actually decides.
+        unverified_header = jwt.get_unverified_header(token)
+        kid = unverified_header.get("kid")
 
-            # Match the key by 'kid' (key ID) claim in token header
-            # Supabase may have multiple keys during rotation periods
-            kid = unverified_header.get("kid")
-            public_key = None
+        jwks = await get_jwks()
 
-            for key in jwks.get("keys", []):
-                if key.get("kid") == kid:
-                    # Construct a verifiable public key object from JWK dict
-                    public_key = jwk.construct(key)
-                    break
+        public_key = None
+        for key in jwks.get("keys", []):
+            if key.get("kid") == kid:
+                public_key = jwk.construct(key)
+                break
 
-            if not public_key:
-                # kid in token does not match any known public key
-                # Could mean token is forged or keys were rotated
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Unable to find matching public key",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
-
-            payload = jwt.decode(
-                token,
-                public_key,
-                algorithms=["ES256"],
-                # Audience verification disabled — Supabase sets this
-                # inconsistently across versions
-                options={"verify_aud": False},
+        if not public_key:
+            # kid matches no known key: forged, or signed before a rotation.
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unable to find matching public key",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
-        else:
-            # ── HS256 verification ────────────────────────────────────────
-            # Older Supabase projects use symmetric HMAC signing
-            # Verified using the JWT secret from project settings
-            payload = jwt.decode(
-                token,
-                settings.supabase_jwt_secret,
-                algorithms=["HS256"],
-                options={"verify_aud": False},
-            )
-
-        return payload
+        return jwt.decode(
+            token,
+            public_key,
+            algorithms=["ES256"],
+            # Audience verification disabled — Supabase sets this
+            # inconsistently across versions
+            options={"verify_aud": False},
+        )
 
     except ExpiredSignatureError:
-        # Specific error for expired tokens
-        # Frontend should catch 401 + "Token has expired" to trigger refresh
+        # Frontend watches for this exact detail to trigger a refresh.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
@@ -146,8 +136,7 @@ async def decode_jwt(token: str) -> dict:
         )
 
     except JWTError as e:
-        # Catches all other JWT errors:
-        # invalid signature, malformed token, wrong algorithm etc.
+        # Invalid signature, malformed token, wrong algorithm, bad header.
         logger.warning(f"JWT validation failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -207,22 +196,3 @@ async def get_current_user(
         email=email or "",
         role=role,
     )
-
-
-async def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-) -> Optional[AuthenticatedUser]:
-    """
-    Same as get_current_user but returns None instead of raising 401.
-
-    Use for endpoints that work for both authenticated and anonymous users.
-    Example: GET /currencies works without login but could return
-    user preferences if logged in.
-    """
-    if not credentials:
-        return None
-
-    try:
-        return await get_current_user(credentials)
-    except HTTPException:
-        return None

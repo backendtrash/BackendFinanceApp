@@ -14,10 +14,9 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_anon_key: str
     supabase_service_role_key: str
-    supabase_jwt_secret: str
 
     # ── App ───────────────────────────────────────────────────────────────
-    app_name: str = "Budget Tracker API"
+    app_name: str = "BackendFinance API"
     app_version: str = "0.1.0"
     debug: bool = False
 

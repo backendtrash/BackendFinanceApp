@@ -28,7 +28,6 @@ os.environ.setdefault(
     "SUPABASE_SERVICE_ROLE_KEY",
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.test-signature",
 )
-os.environ.setdefault("SUPABASE_JWT_SECRET", "test-jwt-secret-not-a-real-secret")
 os.environ.setdefault("DEBUG", "False")
 
 import pytest  # noqa: E402
