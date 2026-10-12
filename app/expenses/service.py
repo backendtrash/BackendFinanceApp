@@ -333,3 +333,22 @@ async def get_weekly_summary(
             for cat_id, v in category_totals.items()
         ],
     }
+
+
+async def delete_all_expenses(user_id: str) -> int:
+    """
+    Deletes every expense belonging to this user and returns the count.
+
+    Part of the full data reset on the Settings screen.
+    """
+    result = (
+        supabase_admin
+        .table("expenses")
+        .delete()
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    deleted = len(result.data or [])
+    logger.info(f"Deleted {deleted} expenses for user {user_id}")
+    return deleted

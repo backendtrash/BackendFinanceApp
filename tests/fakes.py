@@ -31,11 +31,35 @@ class FakeQuery:
         self._single = False
         self._order: tuple[str, bool] | None = None
         self._limit: int | None = None
+        # Writes are declared before their filters (.update(...).eq(...)),
+        # so the operation is recorded here and applied at execute().
+        self._op = "select"
+        self._payload: Any = None
 
     # ── builder surface ───────────────────────────────────────────────────
     # Each of these returns self so the real chained call style works.
 
     def select(self, *_args, **_kwargs) -> "FakeQuery":
+        return self
+
+    def insert(self, payload: Any) -> "FakeQuery":
+        self._op = "insert"
+        self._payload = payload
+        return self
+
+    def update(self, payload: dict) -> "FakeQuery":
+        self._op = "update"
+        self._payload = payload
+        return self
+
+    def upsert(self, payload: dict, on_conflict: str | None = None) -> "FakeQuery":
+        self._op = "upsert"
+        self._payload = payload
+        self._conflict = on_conflict
+        return self
+
+    def delete(self) -> "FakeQuery":
+        self._op = "delete"
         return self
 
     def eq(self, column: str, value: Any) -> "FakeQuery":
@@ -116,15 +140,60 @@ class FakeQuery:
         return True
 
     def execute(self) -> FakeResult:
-        rows = [dict(r) for r in self._store.get(self._table, []) if self._matches(r)]
+        table = self._store.setdefault(self._table, [])
+        self._log.append({
+            "table": self._table,
+            "op": self._op,
+            "filters": list(self._filters),
+            "payload": self._payload,
+        })
+
+        if self._op == "insert":
+            incoming = (
+                self._payload if isinstance(self._payload, list) else [self._payload]
+            )
+            written = []
+            for row in incoming:
+                row = dict(row)
+                row.setdefault("id", f"{self._table}-{len(table) + len(written) + 1}")
+                written.append(row)
+            table.extend(written)
+            return FakeResult(written)
+
+        if self._op == "upsert":
+            row = dict(self._payload)
+            key = getattr(self, "_conflict", None)
+            if key:
+                for existing in table:
+                    if existing.get(key) == row.get(key):
+                        existing.update(row)
+                        return FakeResult([dict(existing)])
+            row.setdefault("id", f"{self._table}-{len(table) + 1}")
+            table.append(row)
+            return FakeResult([dict(row)])
+
+        if self._op == "update":
+            touched = []
+            for existing in table:
+                if self._matches(existing):
+                    existing.update(self._payload)
+                    touched.append(dict(existing))
+            # Postgrest returns the affected rows; an empty list is how a
+            # conditional update reports that it matched nothing.
+            return FakeResult(touched)
+
+        if self._op == "delete":
+            removed = [dict(r) for r in table if self._matches(r)]
+            self._store[self._table] = [r for r in table if not self._matches(r)]
+            return FakeResult(removed)
+
+        rows = [dict(r) for r in table if self._matches(r)]
 
         if self._order:
             column, desc = self._order
             rows.sort(key=lambda r: (r.get(column) is None, r.get(column)), reverse=desc)
         if self._limit is not None:
             rows = rows[: self._limit]
-
-        self._log.append({"table": self._table, "filters": list(self._filters)})
 
         if self._single:
             return FakeResult(rows[0] if rows else None)
@@ -147,3 +216,12 @@ class FakeSupabase:
 
     def filters_for(self, table: str) -> list[list[tuple]]:
         return [q["filters"] for q in self.queries if q["table"] == table]
+
+    def ops_on(self, table: str, op: str) -> list[dict]:
+        return [
+            q for q in self.queries
+            if q["table"] == table and q["op"] == op
+        ]
+
+    def rows(self, table: str) -> list[dict]:
+        return self.store.get(table, [])

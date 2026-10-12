@@ -31,3 +31,23 @@ async def update_preferences(
         user_id=current_user.user_id,
         data=body,
     )
+
+
+# ── Reset Preferences ─────────────────────────────────────────────────────
+@router.delete(
+    "/",
+    response_model=PreferencesResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Reset preferences to defaults",
+)
+async def reset_preferences(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """
+    Returns the authenticated user's preferences to their defaults.
+
+    A reset rather than a delete: every read path assumes the row exists,
+    so writing the defaults back is the same result with one fewer moving
+    part.
+    """
+    return await service.reset_preferences(user_id=current_user.user_id)

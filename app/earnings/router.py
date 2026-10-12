@@ -316,17 +316,10 @@ async def delete_all_earnings(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
-    Deletes ALL earnings belonging to the authenticated user.
-    Returns count of deleted rows.
-    This operation is irreversible.
+    Deletes ALL earning records belonging to the authenticated user.
+
+    Irreversible.
     """
-    result = (
-        supabase_admin
-        .table("earnings")
-        .delete()
-        .eq("user_id", current_user.user_id)
-        .execute()
-    )
-    count = len(result.data) if result.data else 0
-    return {"deleted": count, "message": f"Deleted {count} earnings"}
+    deleted = await service.delete_all_earnings(user_id=current_user.user_id)
+    return {"deleted": deleted, "message": f"Deleted {deleted} earnings"}
 
