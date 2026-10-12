@@ -75,10 +75,6 @@ async def create_expense(
     if data.projected_cost_id:
         payload["projected_cost_id"] = str(data.projected_cost_id)
 
-    # Link to the sinking fund this expense sets money aside for
-    if data.sinking_fund_id:
-        payload["sinking_fund_id"] = str(data.sinking_fund_id)
-
     result = (
         supabase_admin
         .table("expenses")

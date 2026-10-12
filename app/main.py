@@ -179,7 +179,6 @@ from app.analytics.router  import router as analytics_router
 from app.goals.router import router as goals_router
 from app.projected.router import router as projected_router
 from app.preferences.router  import router as preferences_router
-from app.sinking_funds.router import router as sinking_funds_router
 
 
 app.include_router(auth_router,       prefix="/api/v1/auth",       tags=["Auth"])
@@ -193,4 +192,3 @@ app.include_router(analytics_router,  prefix="/api/v1/analytics",  tags=["Analyt
 app.include_router(goals_router,      prefix="/api/v1/goals",      tags=["Goals"])
 app.include_router(projected_router,  prefix="/api/v1/projected",  tags=["Projected Costs"])
 app.include_router(preferences_router, prefix="/api/v1/preferences", tags=["Preferences"])
-app.include_router(sinking_funds_router, prefix="/api/v1/sinking-funds", tags=["Sinking Funds"])
