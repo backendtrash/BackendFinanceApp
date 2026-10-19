@@ -1,0 +1,15 @@
+# Registro de horas
+
+Indicador P1. Horas reales por día o por sesión, por paquete de la EDT.
+
+Se registra lo que se trabajó de verdad, el día que se trabajó. Las celdas
+de horas vacías están pendientes de que el equipo las llene; no se estiman
+a posteriori.
+
+| Fecha | Paquete EDT | Horas | Qué se hizo |
+|---|---|---|---|
+| 11/10/2026 | 3.1 / 3.2 | | Adaptación al diseño de H2 (PR #1): alcance, migraciones, pruebas, integridad, documentación |
+| 18/10/2026 | 3.2 | | Defecto 6: la API aplica las políticas por fila (PR #2) |
+| 18/10/2026 | 3.1 | | Defecto 11: fecha de actualización del tipo de cambio (PR #2) |
+| 18/10/2026 | 3.3 | | Frontend publicado y navegable: repo, rutas, sesión, errores (front PR #1) |
+| 18/10/2026 | 3.2 | | Registros de KPIs, acta de analítica e integración continua (PR #3) |

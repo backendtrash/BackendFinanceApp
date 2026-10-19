@@ -1,0 +1,32 @@
+name: tests
+
+# Runs the full suite on every pull request and on every push to main, so
+# nothing reaches main without it passing. The job is named "tests": that is
+# the status check to require under Settings -> Branches -> main.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # No secrets needed. tests/conftest.py sets placeholder Supabase
+      # settings before the app is imported, and nothing reaches the
+      # network. test_isolation.py skips without its credentials.
+      - name: Run pytest
+        run: pytest -o addopts="" -rxs
