@@ -4,7 +4,7 @@ from gotrue.errors import AuthApiError
 from app.main import limiter
 import logging
 
-from app.database import supabase
+from app.database import supabase, delete_auth_user
 from app.auth.schemas import (
     RegisterRequest,
     LoginRequest,
@@ -212,3 +212,33 @@ async def me(
         email=current_user.email,
         role=current_user.role,
     )
+
+
+# ── Delete Account ────────────────────────────────────────────────────────
+@router.delete(
+    "/account",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete the authenticated user's account and all their data",
+)
+async def delete_account(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """
+    Deletes the caller's own account. Irreversible.
+
+    The Settings screen already offered this and called this route, which
+    did not exist, so the button always failed (defect 15). Deleting the
+    Auth user cascades to every row the user owns; see delete_auth_user.
+
+    Only ever the caller's own id, taken from the verified token — never
+    from the request — so no request can delete someone else's account.
+    """
+    try:
+        delete_auth_user(current_user.user_id)
+    except AuthApiError as e:
+        logger.error(f"Account deletion failed for {current_user.user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not delete the account. Nothing was removed; try again.",
+        )
+    logger.info(f"Deleted account {current_user.user_id}")
