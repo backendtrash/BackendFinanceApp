@@ -149,3 +149,21 @@ def fetch_one(query) -> Optional[dict]:
     """
     result = query.maybe_single().execute()
     return result.data if result is not None else None
+
+
+def delete_auth_user(user_id: str) -> None:
+    """
+    Deletes a user from Supabase Auth, and with them all of their data.
+
+    Needs the service role: removing an Auth user is an admin operation, so
+    it lives here, beside the client it needs, instead of in a user-facing
+    service. tests/test_db_boundary.py allows supabase_admin in this module
+    and the scheduler only.
+
+    The data goes with the user because every user_id column in migrations/
+    references auth.users(id) ON DELETE CASCADE. Expenses, earnings, rules,
+    budgets and their alerts, goals, projections, categories and
+    preferences all disappear in the same transaction as the account —
+    there is no window in which the account is gone and its rows remain.
+    """
+    supabase_admin.auth.admin.delete_user(user_id)

@@ -1,0 +1,67 @@
+name: isolation
+
+# The two-account isolation suite, on every pull request and push to main.
+# Starts the API from the commit under test and runs tests/test_isolation.py
+# against it with two real accounts. Require the "isolation" check on main
+# alongside "tests".
+#
+# It FAILS if the credentials are missing (EXPOS_REQUIRE_ISOLATION=1): a
+# misnamed secret must not pass as "skipped".
+#
+# Secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+#   EXPOS_TEST_USER_A_EMAIL, EXPOS_TEST_USER_A_PASSWORD
+#   EXPOS_TEST_USER_B_EMAIL, EXPOS_TEST_USER_B_PASSWORD
+#
+# The suite writes real rows as user A and deletes them afterwards. The
+# scheduler is off, so the run never touches any other user's data.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SCHEDULER_ENABLED: "false"
+      DEBUG: "false"
+      EXPOS_TEST_BASE_URL: http://127.0.0.1:8000
+      EXPOS_TEST_USER_A_EMAIL: ${{ secrets.EXPOS_TEST_USER_A_EMAIL }}
+      EXPOS_TEST_USER_A_PASSWORD: ${{ secrets.EXPOS_TEST_USER_A_PASSWORD }}
+      EXPOS_TEST_USER_B_EMAIL: ${{ secrets.EXPOS_TEST_USER_B_EMAIL }}
+      EXPOS_TEST_USER_B_PASSWORD: ${{ secrets.EXPOS_TEST_USER_B_PASSWORD }}
+      EXPOS_REQUIRE_ISOLATION: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Start the API from this commit
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 > api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health; then exit 0; fi
+            sleep 1
+          done
+          echo "API did not become healthy:"; cat api.log; exit 1
+
+      - name: Two-account isolation
+        run: pytest tests/test_isolation.py -o addopts="" -rs -v
+
+      - name: API log
+        if: failure()
+        run: cat api.log

@@ -76,9 +76,22 @@ async def update_exchange_rates(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
-    Manually triggers a fetch of latest exchange rates from ExchangeRate-API.
-    Requires EXCHANGE_RATE_API_KEY to be configured in .env.
+    Refreshes exchange rates now, instead of waiting for the daily job.
+
+    Administrators only (ADMIN_EMAILS). It used to be open to any signed-in
+    user, while writing the shared currencies table as the system — every
+    user's conversions — and spending the rate API's monthly quota
+    (defect 16). Rates refresh on their own every day at 06:00 UTC.
     """
+    from app.config import settings
+
+    if current_user.email.lower() not in settings.admin_emails_list:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can refresh exchange rates. "
+                   "They refresh automatically every day.",
+        )
+
     try:
         # Runs as the system: currencies is shared data the user's own
         # client is not allowed to write under RLS.
