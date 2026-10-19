@@ -219,6 +219,7 @@ async def test_net_worth_accumulates_month_on_month(monkeypatch):
 
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason="net worth ignores everything before the window: the queries have "
            "no lower bound, but the buckets are pre-seeded only for the "
            "months in range, so earlier rows are fetched and then dropped "
@@ -246,6 +247,7 @@ async def test_net_worth_should_include_history_before_the_window(monkeypatch):
 
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason="spending trends average over months the category did not exist, "
            "counting them as zero and dragging the average down "
            "(analytics/service.py:1082)",
@@ -253,12 +255,12 @@ async def test_net_worth_should_include_history_before_the_window(monkeypatch):
 async def test_spending_trend_average_should_ignore_months_with_no_data(monkeypatch):
     """
     A category created last month, with 500 spent in its only full month,
-    has an average of 500 — not 100.
+    has an average of 500. The function reports 125.
 
-    past_values fills every month in range with Decimal("0") via
-    monthly.get(m, 0), so four months of non-existence are averaged in. The
-    average lands at a fifth of the truth and pct_vs_avg is inflated to
-    match, which is what drives the up/down arrow on the dashboard.
+    With months_back=5 there are four past months, and past_values fills the
+    three before the category existed with Decimal("0") via monthly.get(m, 0).
+    500 / 4 = 125. The current month's 500 then reads as +300% against that
+    average and the dashboard arrow says "up" for spending that is flat.
     """
     y1, m1 = _months_ago(1)
     y0, m0 = _months_ago(0)
@@ -280,6 +282,7 @@ async def test_spending_trend_average_should_ignore_months_with_no_data(monkeypa
 
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason="total_variance subtracts real spending over past months from "
            "projected spending over past AND future months "
            "(analytics/service.py:730-732, 748)",
@@ -311,19 +314,24 @@ async def test_projected_total_variance_should_compare_like_with_like(monkeypatc
 
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason="a weekly projected cost with no day_of_week is added in full to "
            "every week of the month, so the weekly view and the monthly "
            "rollup of the same cost disagree (analytics/service.py:1289-1293)",
 )
 async def test_weekly_projection_should_match_the_monthly_rollup(monkeypatch):
     """
-    One 500/week cost is 500 * 4.333333 = 2166.67 a month. The dashboard's
-    monthly figure says exactly that.
+    One 500/week cost is 500 * 4.333333 = 2166.67 a month, and that is what
+    the response's own projected_monthly says.
 
     The weekly breakdown of the same month adds the full 500 to each week
-    bucket, so a month spanning five weeks totals 2500 and one spanning four
-    totals 2000. The same response disagrees with itself depending on which
-    number the user reads.
+    bucket. May 2026 has five buckets, so they total 2500. The same response
+    disagrees with itself depending on which number the user reads.
+
+    This test used to read a key named "projected", which does not exist —
+    the field is projected_weekly — so it raised KeyError and the xfail
+    swallowed it. It never checked the defect. raises=AssertionError on the
+    marker now means an xfail only counts when the assertion itself fails.
     """
     _use(monkeypatch, FakeSupabase(
         expenses=[], earnings=[],
@@ -337,6 +345,8 @@ async def test_weekly_projection_should_match_the_monthly_rollup(monkeypatch):
     ))
 
     result = await service.get_dashboard_weekly(USER, 2026, 5, week_start_day=1)
-    total = sum(Decimal(str(w["projected"])) for w in result["weeks"])
+    weekly_total = sum(Decimal(str(w["projected_weekly"])) for w in result["weeks"])
+    monthly = round(Decimal(str(result["projected_monthly"])), 2)
 
-    assert total == Decimal("2166.67")
+    assert monthly == Decimal("2166.67"), "precondition: the monthly figure"
+    assert weekly_total == monthly
