@@ -2,10 +2,21 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron      import CronTrigger
 import logging
 
+from app.database import supabase_admin, using_db
+
 logger = logging.getLogger(__name__)
 
 # ── Scheduler singleton ───────────────────────────────────────────────────
 scheduler = AsyncIOScheduler()
+
+# ── System context ────────────────────────────────────────────────────────
+# This module is the only place the service role client is used. Every job
+# below wraps its work in using_db(supabase_admin), so the services it calls
+# — which read their client through app.database.db() — run as the system
+# instead of as a user. User requests never get this client: they get one
+# carrying their own JWT, bound by get_current_user, so RLS applies to them.
+#
+# tests/test_db_boundary.py fails if supabase_admin shows up anywhere else.
 
 
 async def run_recurring_rules() -> None:
@@ -19,8 +30,9 @@ async def run_recurring_rules() -> None:
     try:
         from app.recurring.service import process_due_rules
         # No user_id: the nightly job is the one caller that legitimately
-        # processes every user's rules.
-        result = await process_due_rules()
+        # processes every user's rules, which needs the system context.
+        with using_db(supabase_admin):
+            result = await process_due_rules()
         logger.info(
             f"✅ Scheduler: processed {result['processed']} rules, "
             f"created {result['created']} transactions, "
@@ -37,32 +49,61 @@ async def run_budget_alerts() -> None:
     """
     logger.info("⏰ Scheduler: checking budget alerts...")
     try:
-        from app.database      import supabase_admin
         from app.budgets.service import check_all_budgets_after_expense
 
-        # Fetch all users who have active budgets
-        result = (
-            supabase_admin
-            .table("budgets")
-            .select("user_id")
-            .eq("is_active", True)
-            .execute()
-        )
+        with using_db(supabase_admin):
+            # Fetch all users who have active budgets
+            result = (
+                supabase_admin
+                .table("budgets")
+                .select("user_id")
+                .eq("is_active", True)
+                .execute()
+            )
 
-        # Get unique user IDs
-        user_ids = list({
-            row["user_id"]
-            for row in (result.data or [])
-        })
+            # Get unique user IDs
+            user_ids = list({
+                row["user_id"]
+                for row in (result.data or [])
+            })
 
-        for user_id in user_ids:
-            await check_all_budgets_after_expense(user_id)
+            for user_id in user_ids:
+                await check_all_budgets_after_expense(user_id)
 
         logger.info(
             f"✅ Scheduler: checked budgets for {len(user_ids)} users"
         )
     except Exception as e:
         logger.error(f"❌ Scheduler: budget alerts job failed: {e}")
+
+
+async def refresh_exchange_rates() -> dict:
+    """
+    Pulls current rates from the exchange rate API into the currencies table.
+
+    Runs as the system because it has to: currencies is shared reference
+    data with a read-only policy for authenticated users, so a user's own
+    client cannot write it. POST /currencies/update-rates calls this.
+
+    Note that the endpoint still lets any authenticated user trigger a
+    refresh, exactly as before. That is unchanged and recorded in
+    docs/defects.md rather than decided here.
+    """
+    from app.currencies.service import update_exchange_rates
+
+    with using_db(supabase_admin):
+        return await update_exchange_rates()
+
+
+async def run_startup_catchup() -> dict:
+    """
+    Processes rules missed while the server was down. Called once from the
+    application lifespan, before the scheduler's first nightly run.
+    """
+    from app.recurring.service import process_due_rules
+
+    with using_db(supabase_admin):
+        return await process_due_rules()
 
 
 def setup_scheduler() -> AsyncIOScheduler:

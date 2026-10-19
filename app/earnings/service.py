@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID
 import logging
 
-from app.database import supabase_admin
+from app.database import db
 from app.earnings.schemas import EarningCreate, EarningUpdate, EarningFilters
 from app.currencies.service import (
     get_currency_by_id,
@@ -53,7 +53,7 @@ async def create_earning(
         payload["category_id"] = str(data.category_id)
 
     result = (
-        supabase_admin
+        db()
         .table("earnings")
         .insert(payload)
         .execute()
@@ -74,7 +74,7 @@ async def get_earning_by_id(
     Returns None if not found or belongs to a different user.
     """
     result = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("*")
         .eq("id", str(earning_id))
@@ -95,14 +95,14 @@ async def list_earnings(
     Returns tuple of (earnings_list, total_count).
     """
     count_query = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("id", count="exact")
         .eq("user_id", user_id)
     )
 
     data_query = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("*")
         .eq("user_id", user_id)
@@ -182,7 +182,7 @@ async def update_earning(
     # Update non-date fields
     if payload:
         result = (
-            supabase_admin
+            db()
             .table("earnings")
             .update(payload)
             .eq("id", str(earning_id))
@@ -194,7 +194,7 @@ async def update_earning(
 
     # Update date via RPC
     if data.date is not None:
-        supabase_admin.rpc(
+        db().rpc(
             "update_earning_date",
             {
                 "earning_id": str(earning_id),
@@ -215,7 +215,7 @@ async def delete_earning(
     Returns True if deleted, False if not found.
     """
     result = (
-        supabase_admin
+        db()
         .table("earnings")
         .delete()
         .eq("id", str(earning_id))
@@ -236,7 +236,7 @@ async def get_weekly_summary(
     Mirrors expenses weekly summary for cash flow comparisons.
     """
     result = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("category_id, amount_mxn")
         .eq("user_id", user_id)
@@ -283,7 +283,7 @@ async def delete_all_earnings(user_id: str) -> int:
     Part of the full data reset on the Settings screen.
     """
     result = (
-        supabase_admin
+        db()
         .table("earnings")
         .delete()
         .eq("user_id", user_id)

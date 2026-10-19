@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import calendar
 import logging
 
-from app.database import supabase_admin
+from app.database import db
 from app.recurring.schemas import (
     RecurringRuleCreate,
     RecurringRuleUpdate,
@@ -135,7 +135,7 @@ async def create_recurring_rule(
         payload["day_of_month"] = data.day_of_month
 
     result = (
-        supabase_admin
+        db()
         .table("recurring_rules")
         .insert(payload)
         .execute()
@@ -156,7 +156,7 @@ async def list_recurring_rules(
     active_only=True returns only rules that are currently active.
     """
     query = (
-        supabase_admin
+        db()
         .table("recurring_rules")
         .select("*")
         .eq("user_id", user_id)
@@ -179,7 +179,7 @@ async def get_recurring_rule_by_id(
     Returns None if not found or belongs to another user.
     """
     result = (
-        supabase_admin
+        db()
         .table("recurring_rules")
         .select("*")
         .eq("id", str(rule_id))
@@ -226,7 +226,7 @@ async def update_recurring_rule(
         return await get_recurring_rule_by_id(rule_id, user_id)
 
     result = (
-        supabase_admin
+        db()
         .table("recurring_rules")
         .update(payload)
         .eq("id", str(rule_id))
@@ -249,7 +249,7 @@ async def delete_recurring_rule(
     they were auto-generated.
     """
     result = (
-        supabase_admin
+        db()
         .table("recurring_rules")
         .delete()
         .eq("id", str(rule_id))
@@ -312,7 +312,7 @@ async def process_due_rules(user_id: Optional[str] = None) -> dict:
     today = date.today()
 
     query = (
-        supabase_admin
+        db()
         .table("recurring_rules")
         .select("*")
         .eq("is_active", True)
@@ -341,7 +341,7 @@ async def process_due_rules(user_id: Optional[str] = None) -> dict:
 
             # ── Rule has run its course ───────────────────────────────────
             if end_date and today > end_date:
-                supabase_admin.table("recurring_rules").update(
+                db().table("recurring_rules").update(
                     {"is_active": False}
                 ).eq("id", rule_id).execute()
                 logger.info(f"Deactivated expired rule {rule_id}")
@@ -350,7 +350,7 @@ async def process_due_rules(user_id: Optional[str] = None) -> dict:
 
             # ── Exchange rate, read once per rule not once per occurrence ─
             currency_result = (
-                supabase_admin
+                db()
                 .table("currencies")
                 .select("exchange_rate")
                 .eq("id", rule["currency_id"])
@@ -368,7 +368,7 @@ async def process_due_rules(user_id: Optional[str] = None) -> dict:
 
             while next_due <= today:
                 if end_date and next_due > end_date:
-                    supabase_admin.table("recurring_rules").update(
+                    db().table("recurring_rules").update(
                         {"is_active": False}
                     ).eq("id", rule_id).execute()
                     logger.info(f"Deactivated rule {rule_id} past its end date")
@@ -393,7 +393,7 @@ async def process_due_rules(user_id: Optional[str] = None) -> dict:
                 # Claim. The second .eq is the whole guard: it only matches
                 # while next_due_date still holds the value we read.
                 claim = (
-                    supabase_admin
+                    db()
                     .table("recurring_rules")
                     .update({"next_due_date": new_next_due.isoformat()})
                     .eq("id", rule_id)
@@ -424,7 +424,7 @@ async def process_due_rules(user_id: Optional[str] = None) -> dict:
                     tx_payload["category_id"] = rule["category_id"]
 
                 tx_result = (
-                    supabase_admin
+                    db()
                     .table(table)
                     .insert(tx_payload)
                     .execute()
@@ -475,7 +475,7 @@ async def delete_all_rules(user_id: str) -> int:
     rule that produced it.
     """
     result = (
-        supabase_admin
+        db()
         .table("recurring_rules")
         .delete()
         .eq("user_id", user_id)

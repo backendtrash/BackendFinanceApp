@@ -2,7 +2,7 @@ from typing import Optional
 from uuid import UUID
 import logging
 
-from app.database import supabase_admin
+from app.database import db
 from app.categories.schemas import CategoryCreate, CategoryUpdate
 
 # ── Logger ────────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ async def list_categories(
     Optional type_filter limits to 'expense' or 'income' categories.
     """
     query = (
-        supabase_admin
+        db()
         .table("categories")
         .select("*")
         .or_(f"user_id.is.null,user_id.eq.{user_id}")
@@ -56,7 +56,7 @@ async def get_category_by_id(
     Returns None if not found or belongs to another user.
     """
     result = (
-        supabase_admin
+        db()
         .table("categories")
         .select("*")
         .eq("id", str(category_id))
@@ -90,7 +90,7 @@ async def create_category(
     }
 
     result = (
-        supabase_admin
+        db()
         .table("categories")
         .insert(payload)
         .execute()
@@ -130,7 +130,7 @@ async def update_category(
         return await get_category_by_id(category_id, user_id)
 
     result = (
-        supabase_admin
+        db()
         .table("categories")
         .update(payload)
         .eq("id", str(category_id))
@@ -187,7 +187,7 @@ async def count_category_references(category_id: UUID, user_id: str) -> dict[str
 
     for table, column in CATEGORY_REFERENCES:
         result = (
-            supabase_admin
+            db()
             .table(table)
             .select("id")
             .eq(column, str(category_id))
@@ -234,7 +234,7 @@ async def delete_category(
         raise CategoryInUse(counts)
 
     result = (
-        supabase_admin
+        db()
         .table("categories")
         .delete()
         .eq("id", str(category_id))
@@ -265,7 +265,7 @@ async def delete_all_categories(user_id: str) -> dict:
     which point nothing references them and everything goes.
     """
     owned = (
-        supabase_admin
+        db()
         .table("categories")
         .select("id, name")
         .eq("user_id", user_id)
@@ -281,7 +281,7 @@ async def delete_all_categories(user_id: str) -> dict:
             skipped[category["name"]] = sum(counts.values())
             continue
 
-        supabase_admin.table("categories").delete().eq(
+        db().table("categories").delete().eq(
             "id", category["id"]
         ).eq("user_id", user_id).execute()
         deleted += 1

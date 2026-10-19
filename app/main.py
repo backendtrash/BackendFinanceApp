@@ -34,8 +34,8 @@ async def lifespan(app: FastAPI):
     # On startup immediately process any overdue recurring rules
     # This catches up rules that were missed while the server was down
     try:
-        from app.recurring.service import process_due_rules
-        result = await process_due_rules()
+        from app.scheduler import run_startup_catchup
+        result = await run_startup_catchup()
         if result["created"] > 0:
             print(
                 f"⚡ Startup catchup: created {result['created']} "

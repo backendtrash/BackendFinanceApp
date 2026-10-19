@@ -3,7 +3,7 @@ from typing   import Optional
 from uuid     import UUID
 import logging
 
-from app.database import supabase_admin
+from app.database import db
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ async def _get_exchange_rate(currency_id: Optional[str]) -> Decimal:
         return Decimal("1")
 
     result = (
-        supabase_admin
+        db()
         .table("currencies")
         .select("exchange_rate")
         .eq("id", currency_id)
@@ -31,7 +31,7 @@ async def _get_exchange_rate(currency_id: Optional[str]) -> Decimal:
 async def list_projected_costs(user_id: str) -> list[dict]:
     """Returns all projected costs enriched with amount_mxn."""
     result = (
-        supabase_admin
+        db()
         .table("projected_costs")
         .select("*")
         .eq("user_id", user_id)
@@ -43,7 +43,7 @@ async def list_projected_costs(user_id: str) -> list[dict]:
 
     # Fetch all currencies once for enrichment
     currencies_result = (
-        supabase_admin
+        db()
         .table("currencies")
         .select("id, exchange_rate")
         .execute()
@@ -95,7 +95,7 @@ async def create_projected_cost(
     payload["plan_group"] = data.plan_group
 
     result = (
-        supabase_admin
+        db()
         .table("projected_costs")
         .insert(payload)
         .execute()
@@ -134,7 +134,7 @@ async def update_projected_cost(
         return None
 
     result = (
-        supabase_admin
+        db()
         .table("projected_costs")
         .update(payload)
         .eq("id", str(cost_id))
@@ -154,7 +154,7 @@ async def update_projected_cost(
 async def delete_projected_cost(cost_id: UUID, user_id: str) -> bool:
     """Deletes a projected cost."""
     result = (
-        supabase_admin
+        db()
         .table("projected_costs")
         .delete()
         .eq("id", str(cost_id))
@@ -180,7 +180,7 @@ async def get_monthly_projection(
     Returns breakdown by category for analytics.
     """
     result = (
-        supabase_admin
+        db()
         .table("projected_costs")
         .select("*, currencies(exchange_rate)")
         .eq("user_id", user_id)
@@ -249,7 +249,7 @@ async def delete_all_projected_costs(user_id: str) -> int:
     foreign key sets projected_cost_id to null.
     """
     result = (
-        supabase_admin
+        db()
         .table("projected_costs")
         .delete()
         .eq("user_id", user_id)

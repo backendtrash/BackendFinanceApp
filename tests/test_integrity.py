@@ -14,6 +14,7 @@ from decimal import Decimal
 import pytest
 
 from app.categories import service as categories_service
+from app.database import bind_db
 from app.recurring import service as recurring_service
 from fakes import FakeSupabase
 
@@ -63,7 +64,7 @@ async def test_processing_twice_in_one_day_creates_one_transaction(monkeypatch):
     second run must find nothing left to do.
     """
     fake = _store(_rule())
-    monkeypatch.setattr(recurring_service, "supabase_admin", fake)
+    bind_db(fake)
 
     first = await recurring_service.process_due_rules()
     second = await recurring_service.process_due_rules()
@@ -82,7 +83,7 @@ async def test_a_five_week_backlog_is_drained_in_one_run(monkeypatch):
     cursor ends in the future.
     """
     fake = _store(_rule(days_overdue=35, frequency="weekly"))
-    monkeypatch.setattr(recurring_service, "supabase_admin", fake)
+    bind_db(fake)
 
     result = await recurring_service.process_due_rules()
 
@@ -107,7 +108,7 @@ async def test_the_cursor_is_claimed_before_the_transaction_is_written(monkeypat
     duplicating one, which for money is the right way to fail.
     """
     fake = _store(_rule())
-    monkeypatch.setattr(recurring_service, "supabase_admin", fake)
+    bind_db(fake)
 
     await recurring_service.process_due_rules()
 
@@ -128,7 +129,7 @@ async def test_the_claim_is_conditional_on_the_value_that_was_read(monkeypatch):
     can match it, and the loser gets zero rows back and stops.
     """
     fake = _store(_rule())
-    monkeypatch.setattr(recurring_service, "supabase_admin", fake)
+    bind_db(fake)
 
     await recurring_service.process_due_rules()
 
@@ -148,7 +149,7 @@ async def test_a_lost_claim_writes_nothing(monkeypatch):
     matches no row, so no transaction may be written.
     """
     fake = _store(_rule())
-    monkeypatch.setattr(recurring_service, "supabase_admin", fake)
+    bind_db(fake)
 
     original_table = fake.table
 
@@ -176,7 +177,7 @@ async def test_a_lost_claim_writes_nothing(monkeypatch):
 
 async def test_an_inactive_rule_is_never_processed(monkeypatch):
     fake = _store(_rule(is_active=False))
-    monkeypatch.setattr(recurring_service, "supabase_admin", fake)
+    bind_db(fake)
 
     result = await recurring_service.process_due_rules()
     assert result["created"] == 0
@@ -187,7 +188,7 @@ async def test_a_rule_past_its_end_date_is_deactivated_not_processed(monkeypatch
         days_overdue=10,
         end_date=(date.today() - timedelta(days=5)).isoformat(),
     ))
-    monkeypatch.setattr(recurring_service, "supabase_admin", fake)
+    bind_db(fake)
 
     result = await recurring_service.process_due_rules()
 
@@ -205,7 +206,7 @@ async def test_processing_can_be_scoped_to_one_user(monkeypatch):
         _rule("rule-a", user_id=USER_A),
         _rule("rule-b", user_id=USER_B),
     )
-    monkeypatch.setattr(recurring_service, "supabase_admin", fake)
+    bind_db(fake)
 
     result = await recurring_service.process_due_rules(user_id=USER_A)
 
@@ -219,7 +220,7 @@ async def test_the_scheduler_still_processes_every_user(monkeypatch):
         _rule("rule-a", user_id=USER_A),
         _rule("rule-b", user_id=USER_B),
     )
-    monkeypatch.setattr(recurring_service, "supabase_admin", fake)
+    bind_db(fake)
 
     result = await recurring_service.process_due_rules()
 
@@ -229,7 +230,7 @@ async def test_the_scheduler_still_processes_every_user(monkeypatch):
 
 async def test_income_rules_write_to_earnings(monkeypatch):
     fake = _store(_rule(type_="income"))
-    monkeypatch.setattr(recurring_service, "supabase_admin", fake)
+    bind_db(fake)
 
     await recurring_service.process_due_rules()
 
@@ -251,7 +252,7 @@ def _categories_store(**referencing) -> FakeSupabase:
 
 async def test_an_unused_category_can_be_deleted(monkeypatch):
     fake = _categories_store()
-    monkeypatch.setattr(categories_service, "supabase_admin", fake)
+    bind_db(fake)
 
     assert await categories_service.delete_category(CAT_FOOD, USER_A) is True
     assert fake.rows("categories") == []
@@ -276,7 +277,7 @@ async def test_a_referenced_category_is_refused(monkeypatch, table, column):
     fake = _categories_store(**{
         table: [{"id": "row-1", "user_id": USER_A, column: CAT_FOOD}]
     })
-    monkeypatch.setattr(categories_service, "supabase_admin", fake)
+    bind_db(fake)
 
     with pytest.raises(categories_service.CategoryInUse) as raised:
         await categories_service.delete_category(CAT_FOOD, USER_A)
@@ -295,7 +296,7 @@ async def test_the_refusal_reports_counts_per_table(monkeypatch):
         ],
         budgets=[{"id": "b1", "user_id": USER_A, "category_id": CAT_FOOD}],
     )
-    monkeypatch.setattr(categories_service, "supabase_admin", fake)
+    bind_db(fake)
 
     with pytest.raises(categories_service.CategoryInUse) as raised:
         await categories_service.delete_category(CAT_FOOD, USER_A)
@@ -312,7 +313,7 @@ async def test_another_users_rows_do_not_block_the_delete(monkeypatch):
     fake = _categories_store(
         expenses=[{"id": "e1", "user_id": USER_B, "category_id": CAT_FOOD}]
     )
-    monkeypatch.setattr(categories_service, "supabase_admin", fake)
+    bind_db(fake)
 
     assert await categories_service.delete_category(CAT_FOOD, USER_A) is True
 
@@ -322,11 +323,13 @@ async def test_the_delete_endpoint_answers_409(client, monkeypatch):
     fake = _categories_store(
         expenses=[{"id": "e1", "user_id": USER_A, "category_id": CAT_FOOD}]
     )
-    monkeypatch.setattr(categories_service, "supabase_admin", fake)
-
+    # The TestClient runs the app on its own thread, which does not see a
+    # client bound here. Bind it where get_current_user would: inside the
+    # dependency, on the request's own context.
     async def fake_user():
         from app.auth.dependencies import AuthenticatedUser
-        return AuthenticatedUser(user_id=USER_A, email="a@example.com")
+        bind_db(fake)
+        return AuthenticatedUser(user_id=USER_A, email="a@example.com", db=fake)
 
     from app.auth.dependencies import get_current_user
     from app.main import app
@@ -371,7 +374,7 @@ async def test_bulk_delete_only_touches_the_callers_rows(monkeypatch):
         {"id": "e2", "user_id": USER_A},
         {"id": "e3", "user_id": USER_B},
     ])
-    monkeypatch.setattr(expenses_service, "supabase_admin", fake)
+    bind_db(fake)
 
     deleted = await expenses_service.delete_all_expenses(USER_A)
 
@@ -394,7 +397,7 @@ async def test_wiping_categories_skips_the_ones_still_in_use(monkeypatch):
         expenses=[{"id": "e1", "user_id": USER_A, "category_id": "c2"}],
         earnings=[], budgets=[], recurring_rules=[], projected_costs=[], goals=[],
     )
-    monkeypatch.setattr(categories_service, "supabase_admin", fake)
+    bind_db(fake)
 
     result = await categories_service.delete_all_categories(USER_A)
 
@@ -411,7 +414,7 @@ async def test_resetting_preferences_writes_defaults_rather_than_deleting(monkey
     fake = FakeSupabase(user_preferences=[
         {"id": "p1", "user_id": USER_A, "week_start_day": 5},
     ])
-    monkeypatch.setattr(preferences_service, "supabase_admin", fake)
+    bind_db(fake)
 
     row = await preferences_service.reset_preferences(USER_A)
 

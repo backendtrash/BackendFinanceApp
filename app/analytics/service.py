@@ -4,7 +4,7 @@ from typing import Optional
 import calendar
 import logging
 
-from app.database import supabase_admin
+from app.database import db
 
 # ── Logger ────────────────────────────────────────────────────────────────
 logger = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ async def get_dashboard_summary(
 
     # ── Fetch expenses for the month ──────────────────────────────────────
     exp_result = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("amount_mxn, category_id")
         .eq("user_id", user_id)
@@ -75,7 +75,7 @@ async def get_dashboard_summary(
     # No exclusions needed — goal contributions are now expenses
     # not earnings, so all earnings count toward income
     inc_result = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("amount_mxn")
         .eq("user_id", user_id)
@@ -115,7 +115,7 @@ async def get_dashboard_summary(
     largest_category = "Uncategorized"
     if largest_cat_id:
         cat_result = (
-            supabase_admin
+            db()
             .table("categories")
             .select("name")
             .eq("id", largest_cat_id)
@@ -129,7 +129,7 @@ async def get_dashboard_summary(
     # Use projected_costs table instead of recurring rules
     # Projected costs are explicit forecasts, not transaction generators
     costs_result = (
-        supabase_admin
+        db()
         .table("projected_costs")
         .select("amount, frequency, currency_id, month, year")
         .eq("user_id", user_id)
@@ -138,7 +138,7 @@ async def get_dashboard_summary(
     )
 
     currencies_result = (
-        supabase_admin
+        db()
         .table("currencies")
         .select("id, exchange_rate")
         .execute()
@@ -184,7 +184,7 @@ async def _check_carry_forward_applied(user_id: str, year: int, month: int, note
     last_day  = date(year, month, calendar.monthrange(year, month)[1])
 
     earn_check = (
-        supabase_admin.table("earnings")
+        db().table("earnings")
         .select("id")
         .eq("user_id", user_id)
         .eq("notes", notes_key)
@@ -193,7 +193,7 @@ async def _check_carry_forward_applied(user_id: str, year: int, month: int, note
         .execute()
     )
     exp_check = (
-        supabase_admin.table("expenses")
+        db().table("expenses")
         .select("id")
         .eq("user_id", user_id)
         .eq("notes", notes_key)
@@ -249,7 +249,7 @@ async def apply_carry_forward(user_id: str, year: int, month: int) -> dict:
 
     # Fetch MXN currency id
     mxn_result = (
-        supabase_admin.table("currencies")
+        db().table("currencies")
         .select("id")
         .eq("code", "MXN")
         .execute()
@@ -261,7 +261,7 @@ async def apply_carry_forward(user_id: str, year: int, month: int) -> dict:
     first_day = date(year, month, 1).isoformat()
 
     if balance > 0:
-        supabase_admin.table("earnings").insert({
+        db().table("earnings").insert({
             "user_id":      user_id,
             "amount":       str(balance),
             "currency_id":  mxn_id,
@@ -272,7 +272,7 @@ async def apply_carry_forward(user_id: str, year: int, month: int) -> dict:
         }).execute()
     else:
         abs_balance = abs(balance)
-        supabase_admin.table("expenses").insert({
+        db().table("expenses").insert({
             "user_id":      user_id,
             "amount":       str(abs_balance),
             "currency_id":  mxn_id,
@@ -309,7 +309,7 @@ async def get_monthly_analytics(
 
     # ── Single bulk fetch for all expenses in range ───────────────────────
     exp_result = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("amount_mxn, date")
         .eq("user_id", user_id)
@@ -320,7 +320,7 @@ async def get_monthly_analytics(
 
     # ── Fetch earnings for the period ─────────────────────────────────────
     inc_result = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("amount_mxn, date")
         .eq("user_id", user_id)
@@ -377,7 +377,7 @@ async def get_monthly_analytics(
     # Use projected_costs table instead of recurring rules
     # Projected costs are explicit forecasts, not transaction generators
     costs_result = (
-        supabase_admin
+        db()
         .table("projected_costs")
         .select("amount, frequency, currency_id, month, year")
         .eq("user_id", user_id)
@@ -386,7 +386,7 @@ async def get_monthly_analytics(
     )
 
     currencies_result = (
-        supabase_admin
+        db()
         .table("currencies")
         .select("id, exchange_rate")
         .execute()
@@ -440,7 +440,7 @@ async def get_weekly_analytics(
 
     # ── Bulk fetch expenses and earnings in range ─────────────────────────
     exp_result = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("amount_mxn, week_number, week_year")
         .eq("user_id", user_id)
@@ -450,7 +450,7 @@ async def get_weekly_analytics(
 
     # ── Fetch earnings for the period ─────────────────────────────────────
     inc_result = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("amount_mxn, week_number, week_year")
         .eq("user_id", user_id)
@@ -529,7 +529,7 @@ async def get_category_analytics(
 
     # ── Fetch expenses with category_id ───────────────────────────────────
     exp_result = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("amount_mxn, category_id")
         .eq("user_id", user_id)
@@ -568,7 +568,7 @@ async def get_category_analytics(
 
     if cat_ids:
         cat_result = (
-            supabase_admin
+            db()
             .table("categories")
             .select("id, name, color")
             .in_("id", cat_ids)
@@ -645,7 +645,7 @@ async def get_projected_analytics(
     # ── Fetch projected costs instead of recurring rules ──────────────────
     # Projected costs are explicit forecasts — not transaction generators
     costs_result = (
-        supabase_admin
+        db()
         .table("projected_costs")
         .select("amount, frequency, currency_id")
         .eq("user_id", user_id)
@@ -657,7 +657,7 @@ async def get_projected_analytics(
 
     # ── Fetch all currencies once ─────────────────────────────────────────
     currencies_result = (
-        supabase_admin
+        db()
         .table("currencies")
         .select("id, exchange_rate")
         .execute()
@@ -694,7 +694,7 @@ async def get_projected_analytics(
         )
 
         real_result = (
-            supabase_admin
+            db()
             .table("expenses")
             .select("amount_mxn, date")
             .eq("user_id", user_id)
@@ -758,7 +758,7 @@ async def get_budget_progress_analytics(user_id: str) -> dict:
     """
     # ── Fetch active budgets ──────────────────────────────────────────────
     budgets_result = (
-        supabase_admin
+        db()
         .table("budgets")
         .select("*")
         .eq("user_id", user_id)
@@ -786,7 +786,7 @@ async def get_budget_progress_analytics(user_id: str) -> dict:
 
     if cat_ids:
         cat_result = (
-            supabase_admin
+            db()
             .table("categories")
             .select("id, name, color")
             .in_("id", cat_ids)
@@ -871,7 +871,7 @@ async def get_net_worth_history(
 
     # Fetch ALL earnings and expenses up to end of period
     all_earnings = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("amount_mxn, date")
         .eq("user_id", user_id)
@@ -880,7 +880,7 @@ async def get_net_worth_history(
     ).data or []
 
     all_expenses = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("amount_mxn, date")
         .eq("user_id", user_id)
@@ -948,7 +948,7 @@ async def get_year_over_year(
         last  = date(y, m, calendar.monthrange(y, m)[1])
 
         inc = (
-            supabase_admin
+            db()
             .table("earnings")
             .select("amount_mxn")
             .eq("user_id", user_id)
@@ -958,7 +958,7 @@ async def get_year_over_year(
         ).data or []
 
         exp = (
-            supabase_admin
+            db()
             .table("expenses")
             .select("amount_mxn")
             .eq("user_id", user_id)
@@ -1027,7 +1027,7 @@ async def get_spending_trends(
 
     # Fetch all expenses with category in range
     exp_result = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("amount_mxn, date, category_id")
         .eq("user_id", user_id)
@@ -1039,7 +1039,7 @@ async def get_spending_trends(
     # Fetch category names
     cat_ids    = list({e["category_id"] for e in exp_result if e.get("category_id")})
     cat_result = (
-        supabase_admin
+        db()
         .table("categories")
         .select("id, name, color")
         .in_("id", cat_ids)
@@ -1136,7 +1136,7 @@ async def get_dashboard_weekly(
 
     # ── Fetch expenses for the month ──────────────────────────────────
     exp_result = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("amount_mxn, date")
         .eq("user_id", user_id)
@@ -1147,7 +1147,7 @@ async def get_dashboard_weekly(
 
     # ── Fetch earnings for the month ──────────────────────────────────
     inc_result = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("amount_mxn, date")
         .eq("user_id", user_id)
@@ -1158,7 +1158,7 @@ async def get_dashboard_weekly(
 
     # ── Fetch projected monthly total ─────────────────────────────────
     costs_result = (
-        supabase_admin
+        db()
         .table("projected_costs")
         .select("amount, frequency, currency_id")
         .eq("user_id", user_id)
@@ -1167,7 +1167,7 @@ async def get_dashboard_weekly(
     ).data or []
 
     currencies_result = (
-        supabase_admin
+        db()
         .table("currencies")
         .select("id, exchange_rate")
         .execute()
@@ -1198,7 +1198,7 @@ async def get_dashboard_weekly(
 
     # Fetch full projected costs with day fields
     costs_full_result = (
-        supabase_admin
+        db()
         .table("projected_costs")
         .select("amount, frequency, currency_id, day_of_week, day_of_month, month, year")
         .eq("user_id", user_id)

@@ -15,7 +15,7 @@ from app.earnings.schemas import (
 )
 from app.earnings import service
 from app.earnings.schemas import EarningCreate
-from app.database import supabase_admin
+from app.database import db
 
 # ── Logger ────────────────────────────────────────────────────────────────
 logger = logging.getLogger(__name__)
@@ -117,7 +117,7 @@ async def get_earning_months(
     Returns distinct year/month combinations that have earnings.
     """
     result = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("date, amount_mxn")
         .eq("user_id", current_user.user_id)

@@ -7,12 +7,13 @@ Supabase project. Everything else in tests/ runs against stubs.
 
 Why it cannot be a unit test
 ----------------------------
-Every module imports supabase_admin, the service role client, which
-bypasses row level security completely. So isolation is not enforced by the
-database at runtime — it is enforced by a hand-written .eq("user_id", ...)
-on each query. A stub cannot prove those filters are all present and
-correct, because a stub is not what would leak. Only two real accounts
-against the real stack can.
+Isolation now has two layers. Every user request runs through a client
+carrying that user's own JWT, so the row level security policies in
+migrations/ apply; and each query still filters on .eq("user_id", ...).
+Neither layer can be proven with a stub: the policies live in the real
+database, and a stub is not what would leak. Only two real accounts against
+the real stack can show that both hold — and, before that, that the live
+project's policies match the ones in migrations/ at all.
 
 Running it
 ----------

@@ -15,7 +15,7 @@ from app.expenses.schemas import (
 )
 from app.expenses import service
 from app.expenses.schemas import ExpenseCreate
-from app.database import supabase_admin
+from app.database import db
 
 # ── Logger ────────────────────────────────────────────────────────────────
 logger = logging.getLogger(__name__)
@@ -136,7 +136,7 @@ async def get_expense_months(
     Each entry includes total amount and transaction count.
     """
     result = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("date, amount_mxn")
         .eq("user_id", current_user.user_id)
@@ -381,8 +381,7 @@ async def split_expense(
     New row gets split_amount on split_date.
     Used by the week view relocation feature.
     """
-    from app.database import supabase_admin as sb
-    result = sb.rpc(
+    result = db().rpc(
         "split_expense",
         {
             "expense_id":      str(expense_id),

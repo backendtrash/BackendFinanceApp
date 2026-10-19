@@ -17,6 +17,7 @@ from decimal import Decimal
 import pytest
 
 from app.analytics import service
+from app.database import bind_db
 from fakes import FakeSupabase
 
 
@@ -27,7 +28,10 @@ USER = "00000000-0000-0000-0000-000000000001"
 
 
 def _use(monkeypatch, fake: FakeSupabase) -> FakeSupabase:
-    monkeypatch.setattr(service, "supabase_admin", fake)
+    # Services read their client through db(). Each async test runs in its
+    # own task, so a binding made here is visible to the service calls the
+    # test awaits and cannot leak into the next test.
+    bind_db(fake)
     return fake
 
 
