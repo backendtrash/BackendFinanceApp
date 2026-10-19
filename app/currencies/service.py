@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -180,7 +181,10 @@ async def update_exchange_rates() -> dict:
             .table("currencies")
             .update({
                 "exchange_rate":    str(our_rate),
-                "rate_updated_at":  "now()",
+                # A real UTC timestamp. This used to be the string "now()",
+                # which is SQL, not a value: Postgres rejects it as
+                # timestamp input, so every refresh failed (defect 11).
+                "rate_updated_at":  datetime.now(timezone.utc).isoformat(),
             })
             .eq("code", code)
             .execute()
