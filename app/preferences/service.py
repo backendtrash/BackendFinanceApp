@@ -1,4 +1,4 @@
-from app.database import db
+from app.database import db, fetch_one
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,17 +14,15 @@ async def get_preferences(user_id: str) -> dict:
     If no preferences exist yet creates defaults automatically.
     This ensures every user always has a preferences record.
     """
-    result = (
+    result = fetch_one(
         db()
         .table("user_preferences")
         .select("*")
         .eq("user_id", user_id)
-        .single()
-        .execute()
     )
 
-    if result.data:
-        return result.data
+    if result:
+        return result
 
     # Auto-create default preferences for new users
     created = (

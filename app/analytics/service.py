@@ -4,7 +4,7 @@ from typing import Optional
 import calendar
 import logging
 
-from app.database import db
+from app.database import db, fetch_one
 
 # ── Logger ────────────────────────────────────────────────────────────────
 logger = logging.getLogger(__name__)
@@ -114,16 +114,14 @@ async def get_dashboard_summary(
     # Resolve category name if exists
     largest_category = "Uncategorized"
     if largest_cat_id:
-        cat_result = (
+        cat_result = fetch_one(
             db()
             .table("categories")
             .select("name")
             .eq("id", largest_cat_id)
-            .single()
-            .execute()
         )
-        if cat_result.data:
-            largest_category = cat_result.data["name"]
+        if cat_result:
+            largest_category = cat_result["name"]
 
     # ── Calculate projected monthly expenses from recurring rules ──────────
     # Use projected_costs table instead of recurring rules

@@ -3,7 +3,7 @@ from typing   import Optional
 from uuid     import UUID
 import logging
 
-from app.database import db
+from app.database import db, fetch_one
 
 logger = logging.getLogger(__name__)
 
@@ -15,16 +15,14 @@ async def _get_exchange_rate(currency_id: Optional[str]) -> Decimal:
     if not currency_id:
         return Decimal("1")
 
-    result = (
+    result = fetch_one(
         db()
         .table("currencies")
         .select("exchange_rate")
         .eq("id", currency_id)
-        .single()
-        .execute()
     )
-    if result.data:
-        return Decimal(str(result.data["exchange_rate"]))
+    if result:
+        return Decimal(str(result["exchange_rate"]))
     return Decimal("1")
 
 

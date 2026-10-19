@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import calendar
 import logging
 
-from app.database import db
+from app.database import db, fetch_one
 from app.recurring.schemas import (
     RecurringRuleCreate,
     RecurringRuleUpdate,
@@ -178,17 +178,15 @@ async def get_recurring_rule_by_id(
     Fetches a single recurring rule scoped to the authenticated user.
     Returns None if not found or belongs to another user.
     """
-    result = (
+    result = fetch_one(
         db()
         .table("recurring_rules")
         .select("*")
         .eq("id", str(rule_id))
         .eq("user_id", user_id)
-        .single()
-        .execute()
     )
 
-    return result.data if result.data else None
+    return result if result else None
 
 
 async def update_recurring_rule(

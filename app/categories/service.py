@@ -2,7 +2,7 @@ from typing import Optional
 from uuid import UUID
 import logging
 
-from app.database import db
+from app.database import db, fetch_one
 from app.categories.schemas import CategoryCreate, CategoryUpdate
 
 # ── Logger ────────────────────────────────────────────────────────────────
@@ -55,21 +55,19 @@ async def get_category_by_id(
     Returns system categories OR user-owned categories.
     Returns None if not found or belongs to another user.
     """
-    result = (
+    result = fetch_one(
         db()
         .table("categories")
         .select("*")
         .eq("id", str(category_id))
         .or_(f"user_id.is.null,user_id.eq.{user_id}")
-        .single()
-        .execute()
     )
 
-    if not result.data:
+    if not result:
         return None
 
-    result.data["is_system"] = result.data.get("user_id") is None
-    return result.data
+    result["is_system"] = result.get("user_id") is None
+    return result
 
 
 async def create_category(

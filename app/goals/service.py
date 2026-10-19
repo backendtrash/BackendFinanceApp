@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import calendar
 import logging
 
-from app.database import db
+from app.database import db, fetch_one
 from app.goals.schemas import GoalCreate, GoalUpdate,GoalType
 
 logger = logging.getLogger(__name__)
@@ -166,16 +166,14 @@ async def enrich_goal(user_id: str, goal: dict) -> dict:
         currency_id  = goal.get("currency_id")
 
         if currency_id:
-            cur_result = (
+            cur_result = fetch_one(
                 db()
                 .table("currencies")
                 .select("exchange_rate, code")
                 .eq("id", currency_id)
-                .single()
-                .execute()
             )
-            if cur_result.data:
-                rate   = Decimal(str(cur_result.data["exchange_rate"]))
+            if cur_result:
+                rate   = Decimal(str(cur_result["exchange_rate"]))
                 target = round(raw_target * rate, 2)
             else:
                 target = raw_target
@@ -562,20 +560,18 @@ async def list_goals(user_id: str) -> list[dict]:
 
 async def get_goal_by_id(goal_id: UUID, user_id: str) -> Optional[dict]:
     """Fetches a single goal scoped to the authenticated user."""
-    result = (
+    result = fetch_one(
         db()
         .table("goals")
         .select("*")
         .eq("id", str(goal_id))
         .eq("user_id", user_id)
-        .single()
-        .execute()
     )
 
-    if not result.data:
+    if not result:
         return None
 
-    return await enrich_goal(user_id, result.data)
+    return await enrich_goal(user_id, result)
 
 
 async def update_goal(
@@ -629,20 +625,18 @@ async def delete_goal(goal_id: UUID, user_id: str) -> bool:
     The earnings themselves are never deleted.
     """
     # ── Fetch goal to get its linked category ─────────────────────────────
-    goal_result = (
+    goal_result = fetch_one(
         db()
         .table("goals")
         .select("savings_category_id")
         .eq("id", str(goal_id))
         .eq("user_id", user_id)
-        .single()
-        .execute()
     )
 
-    if not goal_result.data:
+    if not goal_result:
         return False
 
-    savings_category_id = goal_result.data.get("savings_category_id")
+    savings_category_id = goal_result.get("savings_category_id")
 
     # ── Delete the goal ───────────────────────────────────────────────────
     result = (

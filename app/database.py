@@ -127,3 +127,25 @@ def db() -> Client:
             "from get_current_user; background jobs must use using_db()."
         )
     return client
+
+
+def fetch_one(query) -> Optional[dict]:
+    """
+    Runs a query expected to match at most one row; returns it or None.
+
+    Use this, not .single(), for any lookup that can legitimately miss: a row
+    that does not exist, or one that belongs to another user and is therefore
+    invisible under RLS.
+
+    .single() raises APIError (PGRST116) on zero rows instead of returning
+    nothing. Every by-id lookup in the services was written expecting None —
+    "returns None if not found" — so a missing row escaped as a 500 instead of
+    reaching the router's 404 (defect 18), and a new user's first visit to
+    preferences crashed before the defaults could be created (defect 19).
+
+    .maybe_single() returns None from execute() itself when nothing matches,
+    rather than a response whose .data is None, so callers must not reach for
+    .data directly. This helper absorbs that.
+    """
+    result = query.maybe_single().execute()
+    return result.data if result is not None else None

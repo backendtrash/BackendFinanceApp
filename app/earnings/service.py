@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID
 import logging
 
-from app.database import db
+from app.database import db, fetch_one
 from app.earnings.schemas import EarningCreate, EarningUpdate, EarningFilters
 from app.currencies.service import (
     get_currency_by_id,
@@ -73,17 +73,15 @@ async def get_earning_by_id(
     Fetches a single earning by ID scoped to the authenticated user.
     Returns None if not found or belongs to a different user.
     """
-    result = (
+    result = fetch_one(
         db()
         .table("earnings")
         .select("*")
         .eq("id", str(earning_id))
         .eq("user_id", user_id)
-        .single()
-        .execute()
     )
 
-    return result.data if result.data else None
+    return result if result else None
 
 
 async def list_earnings(
