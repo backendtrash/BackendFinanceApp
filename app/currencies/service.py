@@ -1,10 +1,11 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 import logging
 import httpx
 
-from app.database import supabase_admin
+from app.database import db
 from app.config import settings
 
 # ── Logger ────────────────────────────────────────────────────────────────
@@ -17,7 +18,7 @@ async def list_currencies() -> list[dict]:
     No user scoping needed — currencies are global reference data.
     """
     result = (
-        supabase_admin
+        db()
         .table("currencies")
         .select("*")
         .order("code")
@@ -33,7 +34,7 @@ async def get_currency_by_id(currency_id: UUID) -> Optional[dict]:
     Returns None if not found.
     """
     result = (
-        supabase_admin
+        db()
         .table("currencies")
         .select("*")
         .eq("id", str(currency_id))
@@ -50,7 +51,7 @@ async def get_currency_by_code(code: str) -> Optional[dict]:
     Used internally by the conversion and rate update functions.
     """
     result = (
-        supabase_admin
+        db()
         .table("currencies")
         .select("*")
         .eq("code", code.upper())
@@ -176,11 +177,14 @@ async def update_exchange_rates() -> dict:
         our_rate    = round(Decimal("1") / api_rate, 6)
 
         result = (
-            supabase_admin
+            db()
             .table("currencies")
             .update({
                 "exchange_rate":    str(our_rate),
-                "rate_updated_at":  "now()",
+                # A real UTC timestamp. This used to be the string "now()",
+                # which is SQL, not a value: Postgres rejects it as
+                # timestamp input, so every refresh failed (defect 11).
+                "rate_updated_at":  datetime.now(timezone.utc).isoformat(),
             })
             .eq("code", code)
             .execute()

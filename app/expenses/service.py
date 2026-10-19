@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID
 import logging
 
-from app.database import supabase_admin
+from app.database import db
 from app.expenses.schemas import (
     ExpenseCreate,
     ExpenseUpdate,
@@ -76,7 +76,7 @@ async def create_expense(
         payload["projected_cost_id"] = str(data.projected_cost_id)
 
     result = (
-        supabase_admin
+        db()
         .table("expenses")
         .insert(payload)
         .execute()
@@ -101,7 +101,7 @@ async def get_expense_by_id(
     Never raises 404 here — router handles HTTP error responses.
     """
     result = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("*")
         .eq("id", str(expense_id))
@@ -136,7 +136,7 @@ async def list_expenses(
     # Separate count query needed because Supabase does not return
     # total count in the same response as paginated data
     count_query = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("id", count="exact")
         .eq("user_id", user_id)
@@ -144,7 +144,7 @@ async def list_expenses(
 
     # ── Data query ────────────────────────────────────────────────────────
     data_query = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("*")
         .eq("user_id", user_id)
@@ -230,7 +230,7 @@ async def update_expense(
     # ── Update non-date fields ────────────────────────────────────────────
     if payload:
         result = (
-            supabase_admin
+            db()
             .table("expenses")
             .update(payload)
             .eq("id", str(expense_id))
@@ -242,7 +242,7 @@ async def update_expense(
 
     # ── Update date separately via RPC ────────────────────────────────────
     if data.date is not None:
-        supabase_admin.rpc(
+        db().rpc(
             "update_expense_date",
             {
                 "expense_id": str(expense_id),
@@ -269,7 +269,7 @@ async def delete_expense(
     deleting another user's expense even if they guess the UUID.
     """
     result = (
-        supabase_admin
+        db()
         .table("expenses")
         .delete()
         .eq("id", str(expense_id))
@@ -294,7 +294,7 @@ async def get_weekly_summary(
       by_category: list of {category_id, total_mxn, count}
     """
     result = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("category_id, amount_mxn")
         .eq("user_id", user_id)
@@ -342,7 +342,7 @@ async def delete_all_expenses(user_id: str) -> int:
     Part of the full data reset on the Settings screen.
     """
     result = (
-        supabase_admin
+        db()
         .table("expenses")
         .delete()
         .eq("user_id", user_id)

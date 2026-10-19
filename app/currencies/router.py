@@ -80,7 +80,10 @@ async def update_exchange_rates(
     Requires EXCHANGE_RATE_API_KEY to be configured in .env.
     """
     try:
-        return await service.update_exchange_rates()
+        # Runs as the system: currencies is shared data the user's own
+        # client is not allowed to write under RLS.
+        from app.scheduler import refresh_exchange_rates
+        return await refresh_exchange_rates()
     except RuntimeError as e:
         logger.error(f"Rate update failed: {e}")
         raise HTTPException(

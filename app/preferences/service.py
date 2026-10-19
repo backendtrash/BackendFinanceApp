@@ -1,4 +1,4 @@
-from app.database import supabase_admin
+from app.database import db
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ async def get_preferences(user_id: str) -> dict:
     This ensures every user always has a preferences record.
     """
     result = (
-        supabase_admin
+        db()
         .table("user_preferences")
         .select("*")
         .eq("user_id", user_id)
@@ -28,7 +28,7 @@ async def get_preferences(user_id: str) -> dict:
 
     # Auto-create default preferences for new users
     created = (
-        supabase_admin
+        db()
         .table("user_preferences")
         .insert({
             "user_id":        user_id,
@@ -54,7 +54,7 @@ async def update_preferences(user_id: str, data: object) -> dict:
         payload["week_start_day"] = data.week_start_day
 
     result = (
-        supabase_admin
+        db()
         .table("user_preferences")
         .upsert(payload, on_conflict="user_id")
         .execute()
@@ -79,7 +79,7 @@ async def reset_preferences(user_id: str) -> dict:
     payload = {"user_id": user_id, **DEFAULT_PREFERENCES}
 
     result = (
-        supabase_admin
+        db()
         .table("user_preferences")
         .upsert(payload, on_conflict="user_id")
         .execute()

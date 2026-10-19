@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import calendar
 import logging
 
-from app.database import supabase_admin
+from app.database import db
 from app.goals.schemas import GoalCreate, GoalUpdate,GoalType
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ async def calculate_total_savings(
     if savings_category_id:
         # Goal contributions = expenses in the linked category
         query = (
-            supabase_admin
+            db()
             .table("expenses")
             .select("amount_mxn")
             .eq("user_id", user_id)
@@ -48,7 +48,7 @@ async def calculate_total_savings(
 
     # No category → net savings (earnings - expenses)
     expenses_query = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("amount_mxn")
         .eq("user_id", user_id)
@@ -59,7 +59,7 @@ async def calculate_total_savings(
     expenses_result = expenses_query.execute()
 
     earnings_result = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("amount_mxn")
         .eq("user_id", user_id)
@@ -97,7 +97,7 @@ async def calculate_current_savings_rate(user_id: str) -> Decimal:
         start_date = date(year, month, 1)
 
     earnings_result = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("amount_mxn")
         .eq("user_id", user_id)
@@ -105,7 +105,7 @@ async def calculate_current_savings_rate(user_id: str) -> Decimal:
         .execute()
     )
     expenses_result = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("amount_mxn")
         .eq("user_id", user_id)
@@ -167,7 +167,7 @@ async def enrich_goal(user_id: str, goal: dict) -> dict:
 
         if currency_id:
             cur_result = (
-                supabase_admin
+                db()
                 .table("currencies")
                 .select("exchange_rate, code")
                 .eq("id", currency_id)
@@ -215,7 +215,7 @@ async def enrich_goal(user_id: str, goal: dict) -> dict:
             cutoff     = max(since_dt, start_3m)
 
             earn_3m = (
-                supabase_admin
+                db()
                 .table("earnings")
                 .select("amount_mxn")
                 .eq("user_id", user_id)
@@ -223,7 +223,7 @@ async def enrich_goal(user_id: str, goal: dict) -> dict:
                 .execute()
             )
             exp_3m = (
-                supabase_admin
+                db()
                 .table("expenses")
                 .select("amount_mxn")
                 .eq("user_id", user_id)
@@ -289,7 +289,7 @@ async def create_goal(user_id: str, data: GoalCreate) -> dict:
 
         # Count existing goals to pick next color in palette
         existing = (
-            supabase_admin
+            db()
             .table("goals")
             .select("id", count="exact")
             .eq("user_id", user_id)
@@ -300,7 +300,7 @@ async def create_goal(user_id: str, data: GoalCreate) -> dict:
 
         # Create expense category named after the goal
         cat_result = (
-            supabase_admin
+            db()
             .table("categories")
             .insert({
                 "user_id": user_id,
@@ -348,7 +348,7 @@ async def create_goal(user_id: str, data: GoalCreate) -> dict:
 
     # ── Insert goal ───────────────────────────────────────────────────────
     result = (
-        supabase_admin
+        db()
         .table("goals")
         .insert(payload)
         .execute()
@@ -357,8 +357,10 @@ async def create_goal(user_id: str, data: GoalCreate) -> dict:
     if not result.data:
         # Rollback: delete auto-created category if goal insert failed
         if auto_category_id:
-            supabase_admin.table("categories").delete().eq(
+            db().table("categories").delete().eq(
                 "id", auto_category_id
+            ).eq(
+                "user_id", user_id  # same guard as delete_goal: own rows only
             ).execute()
         raise RuntimeError("Failed to create goal")
 
@@ -381,7 +383,7 @@ async def list_goals(user_id: str) -> list[dict]:
     """
     # ── Fetch all goals ───────────────────────────────────────────────────
     result = (
-        supabase_admin
+        db()
         .table("goals")
         .select("*")
         .eq("user_id", user_id)
@@ -395,7 +397,7 @@ async def list_goals(user_id: str) -> list[dict]:
 
     # ── Fetch all currencies once ─────────────────────────────────────────
     currencies_result = (
-        supabase_admin
+        db()
         .table("currencies")
         .select("id, exchange_rate")
         .execute()
@@ -407,7 +409,7 @@ async def list_goals(user_id: str) -> list[dict]:
 
     # ── Fetch ALL earnings once ───────────────────────────────────────────
     earnings_result = (
-        supabase_admin
+        db()
         .table("earnings")
         .select("amount_mxn, category_id, date")
         .eq("user_id", user_id)
@@ -417,7 +419,7 @@ async def list_goals(user_id: str) -> list[dict]:
 
     # ── Fetch ALL expenses once ───────────────────────────────────────────
     expenses_result = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("amount_mxn, date, category_id")
         .eq("user_id", user_id)
@@ -561,7 +563,7 @@ async def list_goals(user_id: str) -> list[dict]:
 async def get_goal_by_id(goal_id: UUID, user_id: str) -> Optional[dict]:
     """Fetches a single goal scoped to the authenticated user."""
     result = (
-        supabase_admin
+        db()
         .table("goals")
         .select("*")
         .eq("id", str(goal_id))
@@ -603,7 +605,7 @@ async def update_goal(
         return await get_goal_by_id(goal_id, user_id)
 
     result = (
-        supabase_admin
+        db()
         .table("goals")
         .update(payload)
         .eq("id", str(goal_id))
@@ -628,7 +630,7 @@ async def delete_goal(goal_id: UUID, user_id: str) -> bool:
     """
     # ── Fetch goal to get its linked category ─────────────────────────────
     goal_result = (
-        supabase_admin
+        db()
         .table("goals")
         .select("savings_category_id")
         .eq("id", str(goal_id))
@@ -644,7 +646,7 @@ async def delete_goal(goal_id: UUID, user_id: str) -> bool:
 
     # ── Delete the goal ───────────────────────────────────────────────────
     result = (
-        supabase_admin
+        db()
         .table("goals")
         .delete()
         .eq("id", str(goal_id))
@@ -660,7 +662,7 @@ async def delete_goal(goal_id: UUID, user_id: str) -> bool:
     # Past earnings linked to this category will have category_id → NULL
     # via ON DELETE SET NULL — financial history is never lost
     if savings_category_id:
-        supabase_admin.table("categories").delete().eq(
+        db().table("categories").delete().eq(
             "id", savings_category_id
         ).eq(
             "user_id", user_id  # safety check — only delete own categories
@@ -680,7 +682,7 @@ async def delete_all_goals(user_id: str) -> int:
     spending history and net balance.
     """
     result = (
-        supabase_admin
+        db()
         .table("goals")
         .delete()
         .eq("user_id", user_id)

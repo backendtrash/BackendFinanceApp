@@ -6,7 +6,10 @@ from typing import Optional
 import logging
 import httpx
 
+from supabase import Client
+
 from app.config import settings
+from app.database import bind_db, create_user_client
 
 # ── Logger ────────────────────────────────────────────────────────────────
 logger = logging.getLogger(__name__)
@@ -39,10 +42,13 @@ class AuthenticatedUser:
         user_id: str,
         email: str,
         role: str = "authenticated",
+        db: Optional[Client] = None,
     ):
         self.user_id = user_id
         self.email = email
         self.role = role
+        # Acts as this user: the anon key plus their JWT, so RLS applies.
+        self.db = db
 
     def __repr__(self) -> str:
         return f"AuthenticatedUser(user_id={self.user_id}, email={self.email})"
@@ -191,8 +197,28 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # From here on, every query this request makes runs as this user.
+    # Binding happens only after the token has been verified above, so an
+    # unverified token can never reach the database with its claims trusted.
+    db_client = create_user_client(token)
+    bind_db(db_client)
+
     return AuthenticatedUser(
         user_id=user_id,
         email=email or "",
         role=role,
+        db=db_client,
     )
+
+
+async def get_user_db(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> Client:
+    """
+    The database client for the authenticated user, as a dependency.
+
+    Services normally reach it through app.database.db(), which
+    get_current_user has already bound. This exists for code that prefers
+    the client passed in explicitly.
+    """
+    return current_user.db

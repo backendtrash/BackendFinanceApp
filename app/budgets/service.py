@@ -4,7 +4,7 @@ from uuid import UUID
 from datetime import date
 import logging
 
-from app.database import supabase_admin
+from app.database import db
 from app.budgets.schemas import BudgetCreate, BudgetUpdate, BudgetPeriod
 
 # ── Logger ────────────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ async def calculate_spent_amount(
     start_date, end_date = get_period_date_range(period)
 
     query = (
-        supabase_admin
+        db()
         .table("expenses")
         .select("amount_mxn")
         .eq("user_id", user_id)
@@ -136,7 +136,7 @@ async def check_and_create_alert(
 
     # Check if alert already fired today for this budget
     existing = (
-        supabase_admin
+        db()
         .table("budget_alerts")
         .select("id")
         .eq("budget_id", budget["id"])
@@ -150,7 +150,7 @@ async def check_and_create_alert(
 
     # Create the alert record
     result = (
-        supabase_admin
+        db()
         .table("budget_alerts")
         .insert({
             "budget_id":      budget["id"],
@@ -194,7 +194,7 @@ async def create_budget(
         payload["category_id"] = str(data.category_id)
 
     result = (
-        supabase_admin
+        db()
         .table("budgets")
         .insert(payload)
         .execute()
@@ -216,7 +216,7 @@ async def list_budgets(
     active_only=False returns all including deactivated budgets.
     """
     query = (
-        supabase_admin
+        db()
         .table("budgets")
         .select("*")
         .eq("user_id", user_id)
@@ -247,7 +247,7 @@ async def get_budget_by_id(
     Returns None if not found or belongs to another user.
     """
     result = (
-        supabase_admin
+        db()
         .table("budgets")
         .select("*")
         .eq("id", str(budget_id))
@@ -293,7 +293,7 @@ async def update_budget(
         return await get_budget_by_id(budget_id, user_id)
 
     result = (
-        supabase_admin
+        db()
         .table("budgets")
         .update(payload)
         .eq("id", str(budget_id))
@@ -316,7 +316,7 @@ async def delete_budget(
     Returns True if deleted, False if not found.
     """
     result = (
-        supabase_admin
+        db()
         .table("budgets")
         .delete()
         .eq("id", str(budget_id))
@@ -338,7 +338,7 @@ async def get_budget_alerts(
     Ordered by most recent first.
     """
     query = (
-        supabase_admin
+        db()
         .table("budget_alerts")
         .select("*")
         .eq("user_id", user_id)
@@ -355,7 +355,7 @@ async def get_budget_alerts(
 
 async def clear_budget_alerts(user_id: str) -> int:
     result = (
-        supabase_admin
+        db()
         .table("budget_alerts")
         .delete()
         .eq("user_id", user_id)
@@ -391,7 +391,7 @@ async def delete_all_budgets(user_id: str) -> int:
     budget is gone and it is not financial history worth keeping.
     """
     result = (
-        supabase_admin
+        db()
         .table("budgets")
         .delete()
         .eq("user_id", user_id)
