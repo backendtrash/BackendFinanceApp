@@ -13,3 +13,7 @@ a posteriori.
 | 18/10/2026 | 3.1 | | Defecto 11: fecha de actualización del tipo de cambio (PR #2) |
 | 18/10/2026 | 3.3 | | Frontend publicado y navegable: repo, rutas, sesión, errores (front PR #1) |
 | 18/10/2026 | 3.2 | | Registros de KPIs, acta de analítica e integración continua (PR #3) |
+| 18/10/2026 | 3.2 | | Base Supabase desde migraciones, API en Railway, prueba de aislamiento con dos cuentas (defectos 18–21) |
+| 18/10/2026 | 3.2 | | CI: el workflow nunca ejecutaba pruebas (defecto 22); aislamiento obligatorio en CI |
+| 18/10/2026 | 3.1 | | Defectos 15 (eliminar cuenta) y 16 (refresco de tasas solo admins) |
+| 19/10/2026 | 3.3 | | Frontend en Vercel conectado a la API; CORS; prueba con dos cuentas en producción; defecto 23 |

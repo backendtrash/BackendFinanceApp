@@ -21,6 +21,7 @@
 | 20 | El simulador de pruebas no fallaba como la base real | Media | 18/10/2026 | 18/10/2026 | Corregido | 22bda2b |
 | 21 | La prueba de aislamiento pedía una ruta inexistente | Baja | 18/10/2026 | 18/10/2026 | Corregido | a0c0de5 |
 | 22 | El workflow de CI nunca llegó a ejecutar una prueba | Alta | 18/10/2026 | 18/10/2026 | Corregido | c43e7c6 |
+| 23 | Front: la pantalla de inicio mostraba el apodo interno "BudgetTrash" | Baja | 19/10/2026 | 19/10/2026 | Corregido | front 7873adb |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -37,7 +38,9 @@ That pair became the project's production: the earlier proof-of-concept
 deployment (`BudgetTracker`, from another repository) stays as it was and
 is not part of this codebase. The two-account isolation suite passed
 against this deployment: **24 passed**, no skips. It now also runs in CI on
-every pull request (`.github/workflows/isolation.yml`).
+every pull request (`.github/workflows/isolation.yml`). On 19/10 the
+frontend went live on Vercel against this API, and two accounts signed in
+side by side confirmed it in the browser: each sees only its own expenses.
 
 The isolation suite's first run on staging found defects 18 to 21. None of
 them was a leak — user B never received, changed or deleted a row of user
@@ -335,6 +338,18 @@ writes the shared `currencies` table as the system and spends the rate
 API's quota. It now requires the caller's email in `ADMIN_EMAILS` and
 answers 403 otherwise; empty means nobody. A daily job at 06:00 UTC
 refreshes rates on its own, so no one has to.
+
+### 23. The sign-in screen showed the internal nickname
+
+**Severity:** low · **Repo:** frontend
+**Found and fixed:** 19/10, commit `7873adb`
+
+The first sign-in on the production frontend greeted the user with
+"Welcome back to BudgetTrash", an internal nickname. The rename on 18/10
+had searched only for "Budget Tracker", so eight occurrences of this one
+survived — sign-in, registration, Settings, the header's fallback title,
+the iOS home-screen title and the data export's file name. All now say
+BackendFinance; a search for both old names finds nothing.
 
 ---
 
