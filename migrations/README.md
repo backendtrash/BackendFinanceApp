@@ -70,12 +70,20 @@ in a request body. That is why changing a transaction date goes through
 `update_expense_date` / `update_earning_date` in `011` instead of a plain
 `PATCH`.
 
-## Not run yet
+## Executed
 
-These files have been syntax-checked but **not executed** against a
-database. The live Supabase project was provisioned by hand before the repo
-existed, so its current shape was reconstructed from the insert payloads and
-the Pydantic validators in each module, not read from the database.
+On 18/10/2026 all thirteen files ran start to finish, in order, on a fresh
+Supabase project, which is now the project's production database. Checked
+afterwards in the SQL editor:
 
-Before trusting them against the existing project, diff them against what is
-actually there. On a fresh project they can be run start to finish.
+```sql
+select tablename, rowsecurity from pg_tables where schemaname = 'public';
+--> 10 rows, all true
+
+select count(*) from pg_policies where schemaname = 'public';
+--> 13
+```
+
+They were reconstructed from the insert payloads and the Pydantic
+validators, because the proof-of-concept database had been built by hand.
+That earlier database is not used by this repository and was not migrated.

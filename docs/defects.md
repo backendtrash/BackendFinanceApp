@@ -7,14 +7,14 @@
 | 3 | Recurrentes duplicaban movimientos | Alta | 11/10/2026 | 11/10/2026 | Corregido | bb9b2c8 |
 | 4 | POST /process recorría todos los usuarios | Media | 11/10/2026 | 11/10/2026 | Corregido | bb9b2c8 |
 | 5 | Borrar categoría reescribía historial | Media | 11/10/2026 | 11/10/2026 | Corregido | bb9b2c8 |
-| 6 | API no aplica políticas por fila | Alta | 11/10/2026 | 18/10/2026 | Corregido, verificado en staging | 9311557 |
+| 6 | API no aplica políticas por fila | Alta | 11/10/2026 | 18/10/2026 | Corregido y desplegado | 9311557 |
 | 7–10 | Cálculos de analítica | Media | 11/10/2026 | | Abierto (xfail) | |
 | 11 | Tasa de cambio guardaba `"now()"` como fecha | Alta | 11/10/2026 | 18/10/2026 | Corregido | 725600c |
 | 12 | Front: recargar cerraba la sesión en desarrollo | Media | 18/10/2026 | 18/10/2026 | Corregido | front 82571c6 |
 | 13 | Front: el 409 de categorías no mostraba el motivo | Baja | 18/10/2026 | 18/10/2026 | Corregido | front e6c88aa |
 | 14 | Front: Vista semanal llamaba a un módulo retirado (404) | Baja | 18/10/2026 | 18/10/2026 | Corregido | front bf537dc |
-| 15 | Front: "Eliminar cuenta" llama a un endpoint inexistente | Media | 18/10/2026 | | Abierto | |
-| 16 | Cualquier usuario puede refrescar las tasas de cambio | Baja | 11/10/2026 | | Abierto | |
+| 15 | Front: "Eliminar cuenta" llama a un endpoint inexistente | Media | 18/10/2026 | 18/10/2026 | Corregido | 5fa2838 |
+| 16 | Cualquier usuario puede refrescar las tasas de cambio | Baja | 11/10/2026 | 18/10/2026 | Corregido | e55a21c |
 | 17 | La prueba del defecto 10 nunca verificó el defecto | Media | 18/10/2026 | 18/10/2026 | Corregido | 4765c90 |
 | 18 | Leer o borrar una fila ajena o inexistente daba 500, no 404 | Media | 18/10/2026 | 18/10/2026 | Corregido | 22bda2b |
 | 19 | Usuario nuevo: sus preferencias daban 500 y nunca se creaban | Media | 18/10/2026 | 18/10/2026 | Corregido | 22bda2b |
@@ -23,19 +23,21 @@
 | 22 | El workflow de CI nunca llegó a ejecutar una prueba | Alta | 18/10/2026 | 18/10/2026 | Corregido | c43e7c6 |
 
 Commits marked *front* are in
-[`backendtrash/FrontendFinanceApp`](https://github.com/backendtrash/FrontendFinanceApp);
+[`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
 the rest are in this repository.
 
 **Hashes assume merge commits.** Merging a PR with *Squash* or *Rebase*
 rewrites its commits and these hashes stop resolving. Merge with
 *Create a merge commit*.
 
-**Defect 6 is verified on staging, not yet in production.** On 18/10 the
-migrations ran on a separate Supabase project (10 tables with RLS, 13
-policies), the API ran against it on Railway, and the two-account isolation
-suite passed there: **24 passed**, no skips. Production is the remaining
-step: its policies have to be checked against `migrations/` before PR #2 is
-merged, because Railway deploys every push to `main`.
+**Defect 6 is fixed, deployed and verified.** On 18/10 a new Supabase
+project was built from `migrations/` (10 tables with RLS, 13 policies) and
+the API was deployed against it on Railway, from this repository's `main`.
+That pair became the project's production: the earlier proof-of-concept
+deployment (`BudgetTracker`, from another repository) stays as it was and
+is not part of this codebase. The two-account isolation suite passed
+against this deployment: **24 passed**, no skips. It now also runs in CI on
+every pull request (`.github/workflows/isolation.yml`).
 
 The isolation suite's first run on staging found defects 18 to 21. None of
 them was a leak — user B never received, changed or deleted a row of user
@@ -312,28 +314,27 @@ response reports the difference.
 projected cost with no `day_of_week` is added in full to every week bucket,
 so a 500/week cost shows 2500 in a five-week month against 2166.67 monthly.
 
-### 15. Frontend: "Delete account" calls an endpoint that does not exist
+### 15. "Delete account" called an endpoint that did not exist
 
-**Severity:** medium · **Repo:** frontend and backend
-**Found:** 18/10
+**Severity:** medium · **Found:** 18/10 · **Fixed:** 18/10, commit `5fa2838`
 
-Settings → Delete account calls `DELETE /api/v1/auth/account`. The backend
-has no such route, so the button fails. Not fixed today because the fix is
-backend work with a design question in it: deleting a user from Supabase
-Auth needs the service role, which now belongs only to the system context,
-so the endpoint has to be designed rather than wired up.
+Settings → Delete account called `DELETE /api/v1/auth/account`; the backend
+had no such route, so the button always failed. The route exists now.
+Deleting an Auth user needs the service role, so the call lives in
+`app/database.py` as `delete_auth_user()`, one of the two modules allowed to
+use it. Every user table references `auth.users(id) ON DELETE CASCADE`, so
+the user's data goes in the same transaction as the account. The id comes
+only from the verified token, never from the request.
 
-### 16. Any authenticated user can trigger an exchange rate refresh
+### 16. Any authenticated user could trigger an exchange rate refresh
 
-**Severity:** low
-**Found:** 11/10, during the exploration for defect 6; recorded 18/10
+**Severity:** low · **Found:** 11/10, recorded 18/10 · **Fixed:** 18/10, commit `e55a21c`
 
-`POST /currencies/update-rates` is open to every authenticated user and
-writes the shared `currencies` table as the system. Fixing defect 6 kept
-that behaviour exactly — it now goes through `scheduler.refresh_exchange_rates()`
-— but did not decide who should be allowed to do it. Candidates: an admin
-role check, or moving the refresh to a scheduled job and removing the
-endpoint.
+`POST /currencies/update-rates` was open to every signed-in user while it
+writes the shared `currencies` table as the system and spends the rate
+API's quota. It now requires the caller's email in `ADMIN_EMAILS` and
+answers 403 otherwise; empty means nobody. A daily job at 06:00 UTC
+refreshes rates on its own, so no one has to.
 
 ---
 

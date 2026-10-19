@@ -63,7 +63,7 @@ El conteo anterior sobrecontaba por 5. El total bajó al sacar `sinking_funds` (
 
 - [x] **Migraciones SQL versionadas de las 10 tablas del diseño.** `migrations/000` a `migrations/012`, en orden de dependencias, idempotentes. Incluyen las tres funciones RPC que el código llamaba y que no existían en el repositorio.
 - [x] **Políticas de seguridad por fila de cada tabla.** Con una advertencia importante registrada en `migrations/README.md`: el backend **no** las ejerce, porque todos los módulos usan el cliente de rol de servicio, que las omite. En ejecución, el aislamiento depende del filtro `.eq("user_id", ...)` escrito a mano en cada consulta.
-- [x] **Prueba de aislamiento con dos cuentas en cada módulo.** Ejecutada el 18/10/2026 contra staging (proyecto Supabase aparte, API desplegada en Railway): `tests/test_isolation.py`, 7 módulos, **24 passed**, sin omisiones. La primera corrida encontró los defectos 18 a 21, ninguno de ellos una fuga de datos; se corrigieron y la segunda corrida pasó completa. **Falta repetirla en producción** tras integrar el PR #2.
+- [x] **Prueba de aislamiento con dos cuentas en cada módulo.** Ejecutada el 18/10/2026 contra el despliegue de este repositorio (proyecto Supabase creado desde `migrations/`, API en Railway): `tests/test_isolation.py`, 7 módulos, **24 passed**, sin omisiones. La primera corrida encontró los defectos 18 a 21, ninguno de ellos una fuga de datos; se corrigieron y la segunda corrida pasó completa. Ese despliegue es la producción del proyecto; la suite corre además en CI en cada PR.
 
 ### 3.3 Reglas de integridad del diseño — cerrado
 

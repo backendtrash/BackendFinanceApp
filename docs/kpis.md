@@ -13,7 +13,7 @@ suite completa ese día, con los números que salen de esa corrida.
 Para llenar la fila del 18/10:
 
 ```
-pytest                               ->  219 passed, 1 skipped, 4 xfailed
+pytest                               ->  229 passed, 1 skipped, 4 xfailed
 test_isolation.py contra staging     ->  24 passed
 ```
 
@@ -23,7 +23,7 @@ test_isolation.py contra staging     ->  24 passed
   a 21; ninguno fue una fuga de datos.
 - **Xfailed (4):** los defectos de analítica 7 a 10, a la espera del acta
   del coach (`docs/decisiones/`).
-- **Defectos** (de `docs/defects.md`): 22 registrados; 16 corregidos, 6
-  abiertos (7–10, 15, 16).
+- **Defectos** (de `docs/defects.md`): 22 registrados; 18 corregidos, 4
+  abiertos (7–10, a la espera del acta).
 - **CI:** hasta el defecto 22, el workflow nunca llegó a ejecutar una prueba
   (fallaba al arrancar). Los runs anteriores a ese arreglo no son evidencia.

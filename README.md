@@ -49,6 +49,9 @@ APP_VERSION=0.1.0
 DEBUG=False
 ALLOWED_ORIGINS=https://your-frontend.vercel.app,http://localhost:5173
 EXCHANGE_RATE_BASE_CURRENCY=MXN
+EXCHANGE_RATE_API_KEY=               # optional; without it the rate refresh is skipped
+ADMIN_EMAILS=you@example.com         # who may refresh exchange rates by hand
+SCHEDULER_ENABLED=true               # false only where the API runs just to be tested
 ```
 
 No JWT secret is needed. Tokens are ES256 and verified against the public
@@ -90,7 +93,7 @@ isolation is a separate, opt-in suite — see `tests/README.md`.
 
 | Module      | Base Path              | Endpoints | Description                      |
 |-------------|------------------------|-----------|----------------------------------|
-| Auth        | `/api/v1/auth`         | 5         | Login, register, refresh, me     |
+| Auth        | `/api/v1/auth`         | 6         | Login, register, refresh, me, delete account |
 | Expenses    | `/api/v1/expenses`     | 10        | CRUD + import + months + split   |
 | Earnings    | `/api/v1/earnings`     | 9         | CRUD + import + months           |
 | Categories  | `/api/v1/categories`   | 6         | Expense + income categories      |
@@ -102,8 +105,8 @@ isolation is a separate, opt-in suite — see `tests/README.md`.
 | Projected   | `/api/v1/projected`    | 6         | Forecast costs                   |
 | Preferences | `/api/v1/preferences`  | 3         | Week start day                   |
 
-80 endpoints in total: 77 above plus `/`, `/health` and `/scheduler`.
-74 require authentication; the 6 that do not are register, login, refresh
+81 endpoints in total: 78 above plus `/`, `/health` and `/scheduler`.
+75 require authentication; the 6 that do not are register, login, refresh
 and the three health routes.
 
 > Docs available at `/docs` when `DEBUG=True`
@@ -113,6 +116,7 @@ and the three health routes.
 | Job                      | Schedule        | Description                        |
 |--------------------------|-----------------|------------------------------------|
 | `process_recurring_rules`| Daily 00:00 UTC | Creates transactions from rules    |
+| `refresh_exchange_rates` | Daily 06:00 UTC | Pulls current rates into `currencies` |
 | `check_budget_alerts`    | Daily 08:00 UTC | Checks budgets for threshold breach|
 
 On startup the server also runs a **catchup** — processing any rules that
