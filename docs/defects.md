@@ -15,6 +15,7 @@
 | 14 | Front: Vista semanal llamaba a un módulo retirado (404) | Baja | 18/10/2026 | 18/10/2026 | Corregido | front bf537dc |
 | 15 | Front: "Eliminar cuenta" llama a un endpoint inexistente | Media | 18/10/2026 | | Abierto | |
 | 16 | Cualquier usuario puede refrescar las tasas de cambio | Baja | 11/10/2026 | | Abierto | |
+| 17 | La prueba del defecto 10 nunca verificó el defecto | Media | 18/10/2026 | 18/10/2026 | Corregido | 4765c90 |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp`](https://github.com/backendtrash/FrontendFinanceApp);
@@ -182,6 +183,25 @@ scope. The frontend still linked to it and Week View — one of the design's
 eleven screens — requested it on every visit, getting a 404. Its route and
 menu entries are gone and its query is disabled; the code stays on
 `feat/sinking-funds`.
+
+### 17. The test pinning defect 10 never tested defect 10
+
+**Severity:** medium — false evidence for risk R4
+**Found and fixed:** 18/10, commit `4765c90` (PR #3)
+
+`test_weekly_projection_should_match_the_monthly_rollup` read a key named
+`projected` from each week bucket; the field is `projected_weekly`. The
+`KeyError` made it fail, and `xfail` accepts any exception, so the suite
+reported an expected failure for defect 10 while asserting nothing about it.
+
+Found while measuring current values for the coach's decision record:
+running the function directly raised the error the test had been hiding.
+
+The four analytics `xfail` markers now carry `raises=AssertionError`, so a
+test only counts as an expected failure when its assertion fails. With
+that, defects 7–9 still xfail — their tests were sound — and the defect 10
+test, fixed to read the real field, fails on exactly the defect:
+`2500.00 != 2166.67`.
 
 ---
 
