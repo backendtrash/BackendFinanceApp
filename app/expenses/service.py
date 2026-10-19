@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID
 import logging
 
-from app.database import db
+from app.database import db, fetch_one
 from app.expenses.schemas import (
     ExpenseCreate,
     ExpenseUpdate,
@@ -100,17 +100,15 @@ async def get_expense_by_id(
     Returns None if not found or belongs to a different user.
     Never raises 404 here — router handles HTTP error responses.
     """
-    result = (
+    result = fetch_one(
         db()
         .table("expenses")
         .select("*")
         .eq("id", str(expense_id))
         .eq("user_id", user_id)
-        .single()
-        .execute()
     )
 
-    return result.data if result.data else None
+    return result if result else None
 
 
 async def list_expenses(

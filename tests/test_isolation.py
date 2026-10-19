@@ -196,10 +196,23 @@ def owned_rows(client_a, currency_id) -> dict:
 MODULES = ["categories", "expenses", "earnings", "budgets",
            "recurring", "goals", "projected"]
 
+# projected has no GET /{id} route — only the list, create, update and
+# delete. The first version of this suite asked for one anyway, got a 405,
+# and reported it as a failure (defect 21). Its read isolation is covered by
+# the listing test; its write isolation by the update test below.
+READABLE_BY_ID = [m for m in MODULES if m != "projected"]
+
+
+def _ids_in(payload) -> set:
+    rows = payload if isinstance(payload, list) else payload.get("items", payload)
+    if isinstance(rows, dict):
+        rows = next((v for v in rows.values() if isinstance(v, list)), [])
+    return {row.get("id") for row in rows if isinstance(row, dict)}
+
 
 # ── The isolation assertions ──────────────────────────────────────────────
 
-@pytest.mark.parametrize("module", MODULES)
+@pytest.mark.parametrize("module", READABLE_BY_ID)
 def test_user_b_cannot_read_user_a_row(client_b, owned_rows, module):
     prefix, row_id = owned_rows[module]
     response = client_b.get(f"{prefix}/{row_id}")
@@ -219,10 +232,31 @@ def test_user_b_cannot_delete_user_a_row(client_b, client_a, owned_rows, module)
         f"user B deleted user A's {module} row: {response.status_code}"
     )
 
-    # The row must still be there afterwards.
-    still_there = client_a.get(f"{prefix}/{row_id}")
-    assert still_there.status_code == 200, (
+    # The row must still be there afterwards. Checked through A's own
+    # listing, which every module has, rather than GET /{id}, which one
+    # does not.
+    listing = client_a.get(f"{prefix}/")
+    assert listing.status_code == 200
+    assert row_id in _ids_in(listing.json()), (
         f"user A's {module} row disappeared after user B tried to delete it"
+    )
+
+
+def test_user_b_cannot_modify_user_a_projected_cost(client_a, client_b, owned_rows):
+    """
+    Write isolation for the one module that cannot be read by id. B tries to
+    rename A's projected cost; it must be refused and stay unchanged.
+    """
+    prefix, row_id = owned_rows["projected"]
+    response = client_b.patch(f"{prefix}/{row_id}", json={"name": "taken over by B"})
+
+    assert response.status_code in (403, 404), (
+        f"user B modified user A's projected cost: {response.status_code}"
+    )
+
+    mine = [r for r in client_a.get(f"{prefix}/").json() if r.get("id") == row_id]
+    assert mine and mine[0]["name"] != "taken over by B", (
+        "user A's projected cost was renamed by user B"
     )
 
 

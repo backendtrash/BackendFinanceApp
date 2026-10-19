@@ -4,7 +4,7 @@ from uuid import UUID
 from datetime import date
 import logging
 
-from app.database import db
+from app.database import db, fetch_one
 from app.budgets.schemas import BudgetCreate, BudgetUpdate, BudgetPeriod
 
 # ── Logger ────────────────────────────────────────────────────────────────
@@ -246,20 +246,18 @@ async def get_budget_by_id(
     Fetches a single budget by ID scoped to the authenticated user.
     Returns None if not found or belongs to another user.
     """
-    result = (
+    result = fetch_one(
         db()
         .table("budgets")
         .select("*")
         .eq("id", str(budget_id))
         .eq("user_id", user_id)
-        .single()
-        .execute()
     )
 
-    if not result.data:
+    if not result:
         return None
 
-    return await enrich_budget(user_id, result.data)
+    return await enrich_budget(user_id, result)
 
 
 async def update_budget(

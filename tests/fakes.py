@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from postgrest.exceptions import APIError
+
 
 class FakeResult:
     def __init__(self, data: Any) -> None:
@@ -107,7 +109,11 @@ class FakeQuery:
         return self
 
     def single(self) -> "FakeQuery":
-        self._single = True
+        self._single = "single"
+        return self
+
+    def maybe_single(self) -> "FakeQuery":
+        self._single = "maybe"
         return self
 
     # ── execution ─────────────────────────────────────────────────────────
@@ -195,8 +201,25 @@ class FakeQuery:
         if self._limit is not None:
             rows = rows[: self._limit]
 
+        # Mirrors postgrest-py exactly, because the difference is where bugs
+        # hide. .single() demands exactly one row and RAISES otherwise — it
+        # does not return None. An earlier version of this stub returned None,
+        # which made the stub kinder than the database: every service that
+        # used .single() for a lookup that can legitimately miss looked fine
+        # here and returned 500 against real Supabase (defects 18-20).
+        # .maybe_single() returns None from execute() itself when there is no
+        # row — not a result whose .data is None.
+        if self._single == "maybe" and not rows:
+            return None
         if self._single:
-            return FakeResult(rows[0] if rows else None)
+            if len(rows) != 1:
+                raise APIError({
+                    "code": "PGRST116",
+                    "message": "JSON object requested, multiple (or no) rows returned",
+                    "details": f"The result contains {len(rows)} rows",
+                    "hint": None,
+                })
+            return FakeResult(rows[0])
         return FakeResult(rows)
 
 

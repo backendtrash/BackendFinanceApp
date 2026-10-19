@@ -7,7 +7,7 @@
 | 3 | Recurrentes duplicaban movimientos | Alta | 11/10/2026 | 11/10/2026 | Corregido | bb9b2c8 |
 | 4 | POST /process recorría todos los usuarios | Media | 11/10/2026 | 11/10/2026 | Corregido | bb9b2c8 |
 | 5 | Borrar categoría reescribía historial | Media | 11/10/2026 | 11/10/2026 | Corregido | bb9b2c8 |
-| 6 | API no aplica políticas por fila | Alta | 11/10/2026 | 18/10/2026 | Corregido, sin desplegar | 9311557 |
+| 6 | API no aplica políticas por fila | Alta | 11/10/2026 | 18/10/2026 | Corregido, verificado en staging | 9311557 |
 | 7–10 | Cálculos de analítica | Media | 11/10/2026 | | Abierto (xfail) | |
 | 11 | Tasa de cambio guardaba `"now()"` como fecha | Alta | 11/10/2026 | 18/10/2026 | Corregido | 725600c |
 | 12 | Front: recargar cerraba la sesión en desarrollo | Media | 18/10/2026 | 18/10/2026 | Corregido | front 82571c6 |
@@ -16,6 +16,10 @@
 | 15 | Front: "Eliminar cuenta" llama a un endpoint inexistente | Media | 18/10/2026 | | Abierto | |
 | 16 | Cualquier usuario puede refrescar las tasas de cambio | Baja | 11/10/2026 | | Abierto | |
 | 17 | La prueba del defecto 10 nunca verificó el defecto | Media | 18/10/2026 | 18/10/2026 | Corregido | 4765c90 |
+| 18 | Leer o borrar una fila ajena o inexistente daba 500, no 404 | Media | 18/10/2026 | 18/10/2026 | Corregido | 22bda2b |
+| 19 | Usuario nuevo: sus preferencias daban 500 y nunca se creaban | Media | 18/10/2026 | 18/10/2026 | Corregido | 22bda2b |
+| 20 | El simulador de pruebas no fallaba como la base real | Media | 18/10/2026 | 18/10/2026 | Corregido | 22bda2b |
+| 21 | La prueba de aislamiento pedía una ruta inexistente | Baja | 18/10/2026 | 18/10/2026 | Corregido | a0c0de5 |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp`](https://github.com/backendtrash/FrontendFinanceApp);
@@ -25,11 +29,16 @@ the rest are in this repository.
 rewrites its commits and these hashes stop resolving. Merge with
 *Create a merge commit*.
 
-**Defect 6 is fixed in code but not deployed.** The fix makes the API apply
-the row level security policies — which means it now depends on them being
-right in the live Supabase project, and the migrations in `migrations/` have
-never been run there. PR #2 stays unmerged until those policies are checked;
-Railway deploys every push to `main`.
+**Defect 6 is verified on staging, not yet in production.** On 18/10 the
+migrations ran on a separate Supabase project (10 tables with RLS, 13
+policies), the API ran against it on Railway, and the two-account isolation
+suite passed there: **24 passed**, no skips. Production is the remaining
+step: its policies have to be checked against `migrations/` before PR #2 is
+merged, because Railway deploys every push to `main`.
+
+The isolation suite's first run on staging found defects 18 to 21. None of
+them was a leak — user B never received, changed or deleted a row of user
+A's — but they had to be fixed before the suite could pass.
 
 Nothing here was found by reading code looking for trouble. Each defect
 surfaced because something was being tested, migrated or wired up, and the
@@ -202,6 +211,58 @@ test only counts as an expected failure when its assertion fails. With
 that, defects 7–9 still xfail — their tests were sound — and the defect 10
 test, fixed to read the real field, fails on exactly the defect:
 `2500.00 != 2166.67`.
+
+### 18. A missing or foreign row answered 500 instead of 404
+
+**Severity:** medium
+**Found:** 18/10, first two-account isolation run on staging
+**Fixed:** 18/10, commit `22bda2b`
+
+User B asking for user A's expense got a 500. Nothing leaked: the query
+correctly matched no row. But every by-id lookup used `.single()`, which
+raises on zero rows instead of returning nothing, so "not yours" and "not
+found" both crashed. Six modules on read, plus the lookup inside
+`delete_goal`.
+
+**Not caused by the RLS change.** With the admin client and the `user_id`
+filter the query matched zero rows too, so production answers these with a
+500 today.
+
+The services had been written expecting a miss — each site checks the
+result and falls back to `None`, "Uncategorized" or a rate of 1 — but
+`.single()` raised before that code ran. `app.database.fetch_one()` runs
+`.maybe_single()` and returns the row or `None`; 13 lookups use it now.
+Confirmed live: the same request went from 500 to 404 on staging after the
+redeploy.
+
+### 19. A new user's preferences crashed instead of being created
+
+**Severity:** medium · **Found and fixed:** 18/10, commit `22bda2b`
+
+`get_preferences` is meant to create the default row on a user's first
+read. Its lookup used `.single()`, which raised on the missing row before
+the creation code ran, so every new user got a 500 — which the frontend
+swallowed, falling back to its own default week start. Same fix as 18.
+
+### 20. The test stub was kinder than the database
+
+**Severity:** medium · **Found and fixed:** 18/10, commit `22bda2b`
+
+`tests/fakes.py` returned `None` from `.single()` on zero rows, where the
+real client raises. So the unit tests could not see defects 18 and 19, and
+passed while production returned 500s. The stub now raises like
+postgrest-py, and `.maybe_single()` returns `None` from `execute()` itself,
+also like the real one. Making it stricter immediately surfaced one more
+case: the dashboard's category lookup for the largest expense.
+
+### 21. The isolation suite asked for a route that does not exist
+
+**Severity:** low · **Found and fixed:** 18/10, commit `a0c0de5`
+
+The suite read every module's rows with `GET /{id}`, but projected costs
+have no such route, so two cases failed on a 405 that said nothing about
+isolation. Projected is now checked through the listing and through a write
+attempt: B tries to rename A's projected cost and is refused.
 
 ---
 

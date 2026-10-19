@@ -5,7 +5,7 @@ from uuid import UUID
 import logging
 import httpx
 
-from app.database import db
+from app.database import db, fetch_one
 from app.config import settings
 
 # ── Logger ────────────────────────────────────────────────────────────────
@@ -33,16 +33,14 @@ async def get_currency_by_id(currency_id: UUID) -> Optional[dict]:
     Fetches a single currency by UUID.
     Returns None if not found.
     """
-    result = (
+    result = fetch_one(
         db()
         .table("currencies")
         .select("*")
         .eq("id", str(currency_id))
-        .single()
-        .execute()
     )
 
-    return result.data if result.data else None
+    return result if result else None
 
 
 async def get_currency_by_code(code: str) -> Optional[dict]:
@@ -50,16 +48,14 @@ async def get_currency_by_code(code: str) -> Optional[dict]:
     Fetches a single currency by ISO code (e.g. 'USD', 'MXN').
     Used internally by the conversion and rate update functions.
     """
-    result = (
+    result = fetch_one(
         db()
         .table("currencies")
         .select("*")
         .eq("code", code.upper())
-        .single()
-        .execute()
     )
 
-    return result.data if result.data else None
+    return result if result else None
 
 
 async def convert_amount(
