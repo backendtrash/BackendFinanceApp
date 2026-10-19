@@ -21,5 +21,5 @@ pytest  ->  209 passed, 1 skipped, 4 xfailed
   Mientras no corra, ningún RF nuevo pasa a verificado por esta vía.
 - **Xfailed (4):** los defectos de analítica 7 a 10, a la espera del acta
   del coach (`docs/decisiones/`).
-- **Defectos** (de `docs/defects.md`): 16 registrados; 10 corregidos, 6
+- **Defectos** (de `docs/defects.md`): 17 registrados; 11 corregidos, 6
   abiertos (7–10, 15, 16). El 6 está corregido en código pero sin desplegar.
