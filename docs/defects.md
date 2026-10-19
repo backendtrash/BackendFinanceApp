@@ -20,6 +20,7 @@
 | 19 | Usuario nuevo: sus preferencias daban 500 y nunca se creaban | Media | 18/10/2026 | 18/10/2026 | Corregido | 22bda2b |
 | 20 | El simulador de pruebas no fallaba como la base real | Media | 18/10/2026 | 18/10/2026 | Corregido | 22bda2b |
 | 21 | La prueba de aislamiento pedía una ruta inexistente | Baja | 18/10/2026 | 18/10/2026 | Corregido | a0c0de5 |
+| 22 | El workflow de CI nunca llegó a ejecutar una prueba | Alta | 18/10/2026 | 18/10/2026 | Corregido | c43e7c6 |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp`](https://github.com/backendtrash/FrontendFinanceApp);
@@ -263,6 +264,25 @@ The suite read every module's rows with `GET /{id}`, but projected costs
 have no such route, so two cases failed on a 405 that said nothing about
 isolation. Projected is now checked through the listing and through a write
 attempt: B tries to rename A's projected cost and is refused.
+
+### 22. CI never ran a single test
+
+**Severity:** high — the safety net was not there
+**Found and fixed:** 18/10, commit `c43e7c6`
+
+Every run of the `tests` workflow failed with exit code 4, pytest's code
+for "could not start" rather than "tests failed". `conftest.py` could not
+import the `app` package: `python -m pytest` adds the current directory to
+`sys.path`, plain `pytest` does not. The suite had only been run the first
+way locally; the workflow and the README use the second.
+
+So the first four runs on GitHub — including the ones on the PRs that were
+merged — checked nothing. `pythonpath = .` in `pytest.ini` fixes both
+invocations. Verified with the exact workflow command and no Supabase
+variables: exit 4 before, 219 passed after.
+
+The lesson for the process: a check is only evidence once it has been seen
+to pass *and* seen to fail for the right reason.
 
 ---
 
