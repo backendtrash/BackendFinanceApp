@@ -106,12 +106,27 @@ async def run_startup_catchup() -> dict:
         return await process_due_rules()
 
 
+async def run_exchange_rate_refresh() -> None:
+    """
+    Daily job that refreshes exchange rates, so nobody has to trigger it —
+    the manual endpoint is for administrators only (defect 16).
+    """
+    logger.info("⏰ Scheduler: refreshing exchange rates...")
+    try:
+        result = await refresh_exchange_rates()
+        logger.info(f"✅ Scheduler: exchange rates {result.get('status')}, "
+                    f"{result.get('count', 0)} updated")
+    except Exception as e:
+        logger.error(f"❌ Scheduler: exchange rate refresh failed: {e}")
+
+
 def setup_scheduler() -> AsyncIOScheduler:
     """
     Configures and returns the scheduler with all jobs.
 
     Jobs:
       - process_recurring_rules: daily at 00:00 (midnight)
+      - refresh_exchange_rates:  daily at 06:00
       - check_budget_alerts:     daily at 08:00 (morning)
 
     Timezone: UTC — Railway servers run in UTC.
@@ -134,5 +149,14 @@ def setup_scheduler() -> AsyncIOScheduler:
         replace_existing = True,
     )
 
-    logger.info("📅 Scheduler configured with 2 jobs")
+    # Before the budget check, so alerts are computed on fresh rates.
+    scheduler.add_job(
+        run_exchange_rate_refresh,
+        trigger  = CronTrigger(hour=6, minute=0),
+        id       = "refresh_exchange_rates",
+        name     = "Refresh Exchange Rates",
+        replace_existing = True,
+    )
+
+    logger.info(f"📅 Scheduler configured with {len(scheduler.get_jobs())} jobs")
     return scheduler

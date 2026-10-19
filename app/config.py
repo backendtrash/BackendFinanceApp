@@ -33,6 +33,21 @@ class Settings(BaseSettings):
         """
         return [origin.strip() for origin in self.allowed_origins.split(",")]
 
+    # ── Administration ────────────────────────────────────────────────────
+    # Comma-separated emails allowed to run system operations by hand, such
+    # as refreshing exchange rates. Empty means nobody: those operations
+    # then only run on the scheduler.
+    admin_emails: str = ""
+
+    @property
+    def admin_emails_list(self) -> List[str]:
+        return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
+
+    # Off in CI, where the API is started only to be tested: the scheduler
+    # would otherwise run the startup catch-up and the nightly jobs against
+    # whatever database the run points at.
+    scheduler_enabled: bool = True
+
     # ── Exchange Rate API ─────────────────────────────────────────────────
     exchange_rate_api_key: str = ""
     exchange_rate_base_currency: str = "MXN"
