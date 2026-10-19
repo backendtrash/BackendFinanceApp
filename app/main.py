@@ -26,28 +26,34 @@ async def lifespan(app: FastAPI):
     print(f"📦 Debug mode: {settings.debug}")
     print(f"🌐 Allowed origins: {settings.allowed_origins_list}")
 
-    # Start the background scheduler
-    setup_scheduler()
-    scheduler.start()
-    print(f"📅 Scheduler started with {len(scheduler.get_jobs())} jobs")
+    # SCHEDULER_ENABLED=false in CI: the API is started there only to be
+    # tested, and must not run the catch-up or the nightly jobs against the
+    # database the run points at.
+    if settings.scheduler_enabled:
+        setup_scheduler()
+        scheduler.start()
+        print(f"📅 Scheduler started with {len(scheduler.get_jobs())} jobs")
 
-    # On startup immediately process any overdue recurring rules
-    # This catches up rules that were missed while the server was down
-    try:
-        from app.scheduler import run_startup_catchup
-        result = await run_startup_catchup()
-        if result["created"] > 0:
-            print(
-                f"⚡ Startup catchup: created {result['created']} "
-                f"recurring transactions"
-            )
-    except Exception as e:
-        print(f"⚠️ Startup catchup failed: {e}")
+        # On startup immediately process any overdue recurring rules
+        # This catches up rules that were missed while the server was down
+        try:
+            from app.scheduler import run_startup_catchup
+            result = await run_startup_catchup()
+            if result["created"] > 0:
+                print(
+                    f"⚡ Startup catchup: created {result['created']} "
+                    f"recurring transactions"
+                )
+        except Exception as e:
+            print(f"⚠️ Startup catchup failed: {e}")
+    else:
+        print("📅 Scheduler disabled (SCHEDULER_ENABLED=false)")
 
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────
-    scheduler.shutdown(wait=False)
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
     print(f"👋 Shutting down {settings.app_name}")
 
 

@@ -54,6 +54,16 @@ _MISSING = [name for name in _REQUIRED if not os.environ.get(name)]
 
 pytest.importorskip("httpx")
 
+# Locally, no credentials means skip: the default suite has to run without
+# a live project. In CI, EXPOS_REQUIRE_ISOLATION=1 turns that into a failure,
+# so a missing or misnamed secret cannot quietly pass as "skipped".
+if _MISSING and os.environ.get("EXPOS_REQUIRE_ISOLATION") == "1":
+    pytest.fail(
+        "EXPOS_REQUIRE_ISOLATION=1 but credentials are missing: "
+        + ", ".join(_MISSING),
+        pytrace=False,
+    )
+
 if _MISSING:
     pytest.skip(
         "two-account isolation needs a live project; missing: "
