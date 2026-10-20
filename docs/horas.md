@@ -6,6 +6,18 @@ Se registra lo que se trabajó de verdad, el día que se trabajó. Las celdas
 de horas vacías están pendientes de que el equipo las llene; no se estiman
 a posteriori.
 
+## Totales
+
+| Periodo | Horas | Acumulado |
+|---|---|---|
+| Al corte del 11/10/2026 (semanas 1–5) | 75 | 75 |
+| Semana 6 (12 al 18/10/2026) | 15 | 90 |
+
+El acumulado de 90 h al 18/10 es el que usa el IAC de ese corte
+(`kpis.md`: 92.8 ÷ 90 = 1.03).
+
+## Por sesión
+
 | Fecha | Paquete EDT | Horas | Qué se hizo |
 |---|---|---|---|
 | 11/10/2026 | 3.1 / 3.2 | | Adaptación al diseño de H2 (PR #1): alcance, migraciones, pruebas, integridad, documentación |

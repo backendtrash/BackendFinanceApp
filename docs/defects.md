@@ -22,6 +22,7 @@
 | 21 | La prueba de aislamiento pedía una ruta inexistente | Baja | 18/10/2026 | 18/10/2026 | Corregido | a0c0de5 |
 | 22 | El workflow de CI nunca llegó a ejecutar una prueba | Alta | 18/10/2026 | 18/10/2026 | Corregido | c43e7c6 |
 | 23 | Front: la pantalla de inicio mostraba el apodo interno "BudgetTrash" | Baja | 19/10/2026 | 19/10/2026 | Corregido | front 7873adb |
+| 24 | El registro no pedía aceptar el Aviso de Privacidad (RF01) | Alta | 19/10/2026 | 19/10/2026 | Corregido | 2a92fbe · front 4055134 |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -354,6 +355,32 @@ had searched only for "Budget Tracker", so eight occurrences of this one
 survived — sign-in, registration, Settings, the header's fallback title,
 the iOS home-screen title and the data export's file name. All now say
 BackendFinance; a search for both old names finds nothing.
+
+### 24. Registration did not ask for consent to the privacy notice (RF01)
+
+**Severity:** high — RF01 could not count as verified
+**Found:** 19/10, by review against E1 · **Fixed:** 19/10, commits `2a92fbe` (API) and `4055134` (frontend)
+
+RF01 requires accepting the privacy notice to create an account. Neither
+the registration screen nor the API asked. Now the API answers 422 to any
+registration without `accepted_privacy: true`, and stores the consent in
+the account's Supabase metadata: the time, set by the server, and the
+notice version. The registration screen shows the short notice, a required
+checkbox worded exactly as the notice ("He leído y acepto el Aviso de
+Privacidad") and an optional one for the voluntary purposes, never
+pre-ticked. The full notice is public at `/privacidad`.
+
+The responsible party's details in the notice — name, address, privacy
+email, the area in charge, the people with access, the deletion period —
+are still placeholders, shown highlighted under a draft banner.
+
+**Merged in the wrong order.** The API change (backend PR #8) was meant to
+be merged after the frontend one and was merged first. With *Wait for CI*
+on, Railway only deployed it once the checks on `main` passed, which left
+little room for harm. Measured in production: the API was not yet
+enforcing consent at 18:30:31 and was at 18:32:17; the frontend that sends
+the field was live by 18:31. If registration failed at all, it was for
+seconds to a couple of minutes, not hours — but zero cannot be shown.
 
 ---
 
