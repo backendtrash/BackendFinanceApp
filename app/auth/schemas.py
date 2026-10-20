@@ -2,6 +2,12 @@ from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 
 
+# Version of the privacy notice a new account accepts. Stored with the
+# consent so it is always known which text a user agreed to; bump it when
+# the notice changes and new consent is needed.
+PRIVACY_NOTICE_VERSION = "2026-10-19"
+
+
 class RegisterRequest(BaseModel):
     """
     Request body for POST /api/v1/auth/register
@@ -9,6 +15,26 @@ class RegisterRequest(BaseModel):
     """
     email: EmailStr
     password: str
+
+    # RF01: an account can only be created by accepting the privacy notice.
+    # Required, and must be true — the express consent the notice asks for
+    # to process financial data. Enforced here, not only in the form, so no
+    # client can create an account without it.
+    accepted_privacy: bool
+
+    # The notice's voluntary purposes (news about features, anonymous usage
+    # statistics). Optional and off unless the user ticks it: refusing them
+    # never affects the service.
+    accepted_optional_purposes: bool = False
+
+    @field_validator("accepted_privacy")
+    @classmethod
+    def must_accept_privacy(cls, v: bool) -> bool:
+        if v is not True:
+            raise ValueError(
+                "Debes aceptar el Aviso de Privacidad para crear tu cuenta"
+            )
+        return v
 
     @field_validator("password")
     @classmethod
