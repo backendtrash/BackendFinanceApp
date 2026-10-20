@@ -5,7 +5,10 @@ from app.main import limiter
 import logging
 
 from app.database import supabase, delete_auth_user
+from datetime import datetime, timezone
+
 from app.auth.schemas import (
+    PRIVACY_NOTICE_VERSION,
     RegisterRequest,
     LoginRequest,
     AuthResponse,
@@ -39,9 +42,20 @@ async def register(request: Request, body: RegisterRequest):
     No email confirmation required in development (configured in Supabase dashboard).
     """
     try:
+        # The consent is stored in the account's own metadata, timestamped
+        # by the server rather than the client, with the notice version it
+        # was given against. That is the evidence of consent the notice
+        # refers to, and it travels with the account.
         response = supabase.auth.sign_up({
             "email": body.email,
             "password": body.password,
+            "options": {
+                "data": {
+                    "privacy_accepted_at": datetime.now(timezone.utc).isoformat(),
+                    "privacy_notice_version": PRIVACY_NOTICE_VERSION,
+                    "optional_purposes_accepted": body.accepted_optional_purposes,
+                },
+            },
         })
 
         # Supabase returns a user object even if email confirmation
