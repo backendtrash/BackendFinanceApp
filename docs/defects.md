@@ -13,8 +13,8 @@
 | 12 | Front: recargar cerraba la sesión en desarrollo | Media | 18/10/2026 | 18/10/2026 | Corregido | front 82571c6 |
 | 13 | Front: el 409 de categorías no mostraba el motivo | Baja | 18/10/2026 | 18/10/2026 | Corregido | front e6c88aa |
 | 14 | Front: Vista semanal llamaba a un módulo retirado (404) | Baja | 18/10/2026 | 18/10/2026 | Corregido | front bf537dc |
-| 15 | Front: "Eliminar cuenta" llama a un endpoint inexistente | Media | 18/10/2026 | 18/10/2026 | Corregido | 5fa2838 |
-| 16 | Cualquier usuario puede refrescar las tasas de cambio | Baja | 11/10/2026 | 18/10/2026 | Corregido | e55a21c |
+| 15 | Front: "Eliminar cuenta" llama a un endpoint inexistente | Media | 18/10/2026 | 19/10/2026 | Corregido | 5fa2838 |
+| 16 | Cualquier usuario puede refrescar las tasas de cambio | Baja | 11/10/2026 | 19/10/2026 | Corregido | e55a21c |
 | 17 | La prueba del defecto 10 nunca verificó el defecto | Media | 18/10/2026 | 18/10/2026 | Corregido | 4765c90 |
 | 18 | Leer o borrar una fila ajena o inexistente daba 500, no 404 | Media | 18/10/2026 | 18/10/2026 | Corregido | 22bda2b |
 | 19 | Usuario nuevo: sus preferencias daban 500 y nunca se creaban | Media | 18/10/2026 | 18/10/2026 | Corregido | 22bda2b |
@@ -26,6 +26,9 @@
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
 the rest are in this repository.
+
+**"Cerrado" is the date the fix reached `main`**, not the date of its
+commit: a fix sitting on a branch is not yet in the product.
 
 **Hashes assume merge commits.** Merging a PR with *Squash* or *Rebase*
 rewrites its commits and these hashes stop resolving. Merge with
@@ -39,8 +42,9 @@ deployment (`BudgetTracker`, from another repository) stays as it was and
 is not part of this codebase. The two-account isolation suite passed
 against this deployment: **24 passed**, no skips. It now also runs in CI on
 every pull request (`.github/workflows/isolation.yml`). On 19/10 the
-frontend went live on Vercel against this API, and two accounts signed in
-side by side confirmed it in the browser: each sees only its own expenses.
+frontend went live on Vercel against this API. Account A was checked in the
+browser; both accounts were checked against the production API — A sees its
+expense, B sees none. The browser capture of account B is still pending.
 
 The isolation suite's first run on staging found defects 18 to 21. None of
 them was a leak — user B never received, changed or deleted a row of user
@@ -319,7 +323,7 @@ so a 500/week cost shows 2500 in a five-week month against 2166.67 monthly.
 
 ### 15. "Delete account" called an endpoint that did not exist
 
-**Severity:** medium · **Found:** 18/10 · **Fixed:** 18/10, commit `5fa2838`
+**Severity:** medium · **Found:** 18/10 · **Fixed:** commit `5fa2838` on 18/10, in `main` on 19/10 (PR #6)
 
 Settings → Delete account called `DELETE /api/v1/auth/account`; the backend
 had no such route, so the button always failed. The route exists now.
@@ -331,7 +335,7 @@ only from the verified token, never from the request.
 
 ### 16. Any authenticated user could trigger an exchange rate refresh
 
-**Severity:** low · **Found:** 11/10, recorded 18/10 · **Fixed:** 18/10, commit `e55a21c`
+**Severity:** low · **Found:** 11/10, recorded 18/10 · **Fixed:** commit `e55a21c` on 18/10, in `main` on 19/10 (PR #6)
 
 `POST /currencies/update-rates` was open to every signed-in user while it
 writes the shared `currencies` table as the system and spends the rate
