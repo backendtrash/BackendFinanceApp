@@ -49,6 +49,20 @@ jobs:
             *) echo "::error::SUPABASE_DB_URL is set, but is not a connection URI. It must start with postgresql:// — Supabase -> Connect -> URI -> Session pooler. Check for quotes, a leading space, or another format (JDBC, .NET).";
                exit 1 ;;
           esac
+          # Mask the password before anything can print it. GitHub only hides a
+          # secret when it appears whole; psql error messages can echo pieces
+          # of the URI — the password included — into this public log.
+          PW="${DB_URL#*://}"; PW="${PW%%@*}"; PW="${PW#*:}"
+          if [ -n "$PW" ]; then
+            echo "::add-mask::$PW"
+            echo "::add-mask::$(printf '%s' "$PW" | sed 's/%/%25/g')"
+          fi
+          # A literal % is read as the start of a percent-encoded character,
+          # so psql would reject the URI — and quote part of the password.
+          case "$PW" in
+            *%*) echo "::error::The database password contains '%'. Reset it to letters and numbers only (Supabase -> Project Settings -> Database -> Reset database password), then update SUPABASE_DB_URL.";
+                 exit 1 ;;
+          esac
 
       # pg_dump refuses to dump a server newer than itself, so install the
       # client that matches the server's major version.
