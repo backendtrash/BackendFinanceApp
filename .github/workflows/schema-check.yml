@@ -1,0 +1,119 @@
+name: schema-check
+
+# E7: does production's schema match migrations/?
+#
+# Builds a throwaway PostgreSQL of the same major version as production,
+# with the few Supabase pieces the migrations rely on (the auth schema,
+# auth.users, auth.uid(), and the anon/authenticated roles), applies every
+# file in migrations/ in order, and diffs its public schema against
+# production's. Fails on any difference.
+#
+# Runs when migrations change on main, weekly, and by hand. A migration
+# merged before it was run in production fails here on purpose — run new
+# migrations in the Supabase SQL editor first.
+#
+# Uploads production's schema (structure only, no data) and the diff, as
+# evidence. Needs SUPABASE_DB_URL; see backup.yml.
+
+on:
+  push:
+    branches: [main]
+    paths: ["migrations/**", ".github/workflows/schema-check.yml"]
+  schedule:
+    - cron: "0 10 * * 0"   # Sundays, an hour after the backup
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  schema-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      LOCAL_URL: postgresql://postgres:postgres@localhost:5433/postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the secret is set
+        run: '[ -n "$DB_URL" ] || { echo "::error::SUPABASE_DB_URL is not set"; exit 1; }'
+
+      - name: Detect the server version
+        id: server
+        run: |
+          NUM=$(psql "$DB_URL" -tAc "show server_version_num")
+          echo "major=$((NUM / 10000))" >> "$GITHUB_OUTPUT"
+
+      - name: Install a matching pg_dump
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq "postgresql-client-${{ steps.server.outputs.major }}"
+
+      - name: Start a PostgreSQL of the same version
+        run: |
+          docker run -d --name pg -e POSTGRES_PASSWORD=postgres -p 5433:5432 \
+            "postgres:${{ steps.server.outputs.major }}"
+          for i in $(seq 1 30); do pg_isready -h localhost -p 5433 -q && exit 0; sleep 1; done
+          echo "::error::local PostgreSQL did not start"; exit 1
+
+      # Only what the migrations reference and Supabase provides. pgcrypto is
+      # created in "extensions", where Supabase keeps it, so 000's
+      # "create extension if not exists" is a no-op here as it is there.
+      - name: Add the Supabase pieces the migrations rely on
+        run: |
+          psql "$LOCAL_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create role service_role nologin bypassrls;
+          create schema extensions;
+          create extension pgcrypto with schema extensions;
+          create schema auth;
+          create table auth.users (id uuid primary key);
+          create function auth.uid() returns uuid language sql stable as $$
+            select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+          $$;
+          SQL
+
+      - name: Apply migrations/ in order
+        run: |
+          for f in $(ls migrations/*.sql | sort); do
+            echo "applying $f"
+            psql "$LOCAL_URL" -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Dump both public schemas
+        run: |
+          BIN="/usr/lib/postgresql/${{ steps.server.outputs.major }}/bin"
+          OPTS="--schema-only --schema=public --no-owner --no-privileges"
+          "$BIN/pg_dump" "$DB_URL"    $OPTS --file=production-schema.sql
+          "$BIN/pg_dump" "$LOCAL_URL" $OPTS --file=migrations-schema.sql
+
+      # Drop what differs for reasons that are not the schema: comments,
+      # session settings, and the random \restrict token newer pg_dump adds.
+      - name: Compare
+        run: |
+          norm() { grep -vE '^(--|SET |SELECT pg_catalog\.set_config|\\(un)?restrict )' "$1" | sed '/^[[:space:]]*$/d'; }
+          norm production-schema.sql > production.norm
+          norm migrations-schema.sql > migrations.norm
+          if diff -u migrations.norm production.norm > schema.diff; then
+            echo "Production matches migrations/ — $(grep -c '^CREATE TABLE' production.norm) tables, $(grep -c '^CREATE POLICY' production.norm) policies, $(grep -c '^CREATE FUNCTION' production.norm) functions."
+          else
+            echo "::error::production differs from migrations/:"
+            cat schema.diff
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: schema-e7
+          path: |
+            production-schema.sql
+            schema.diff
+          retention-days: 90
+          if-no-files-found: ignore
