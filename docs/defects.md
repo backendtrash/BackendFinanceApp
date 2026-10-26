@@ -25,6 +25,7 @@
 | 24 | El registro no pedía aceptar el Aviso de Privacidad (RF01) | Alta | 19/10/2026 | 19/10/2026 | Corregido | 2a92fbe · front 4055134 |
 | 25 | Parte de la contraseña de la base de producción quedó en un log público | Alta | 25/10/2026 | 25/10/2026 | Corregido | a31d247 |
 | 26 | El primer respaldo solo contenía la lista de usuarios, sin los datos | Media | 25/10/2026 | 25/10/2026 | Corregido | aeba9d1 |
+| 27 | La verificación del esquema marcaba una diferencia que solo eran saltos de línea | Baja | 25/10/2026 | 25/10/2026 | Corregido | 312cc87 |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -395,6 +396,24 @@ for all ten tables.
 This is the reason the check exists: the dump and the encryption both
 succeeded, and only reading the file back showed it was empty of what
 mattered.
+
+### 27. The schema check reported a difference that was only line endings
+
+**Severity:** low — a false alarm, no wrong data
+**Found:** 25/10, 21:52, on the first schema check that reached the
+database (run #4) · **Fixed:** 25/10, commit `312cc87` (PR #15, in `main` at
+21:58); green on the branch (run #5) and on `main` (runs #6 and #7)
+
+The check flagged the bodies of all four plpgsql functions. The text was
+identical: production stores them with Windows line endings (`\r\n`),
+because the migrations were pasted into the SQL editor from Windows, and
+`migrations/` uses `\n`. PostgreSQL treats both the same. The comparison
+now drops the `\r` first. Tables, policies and indexes matched from the
+start: the diff had a single hunk, covering only those functions.
+
+While testing the fix locally, the filter that drops comments turned out to
+be ignored entirely by the older GNU grep on the development machine. It is
+now written in a form both versions read the same way.
 
 ---
 
