@@ -42,6 +42,13 @@ jobs:
         run: |
           [ -n "$DB_URL" ]     || { echo "::error::SUPABASE_DB_URL is not set"; exit 1; }
           [ -n "$PASSPHRASE" ] || { echo "::error::BACKUP_PASSPHRASE is not set"; exit 1; }
+          # psql treats anything that is not a URI as a local database name and
+          # fails with a confusing "socket" error. Say what is actually wrong.
+          case "$DB_URL" in
+            postgresql://*|postgres://*) ;;
+            *) echo "::error::SUPABASE_DB_URL is set, but is not a connection URI. It must start with postgresql:// — Supabase -> Connect -> URI -> Session pooler. Check for quotes, a leading space, or another format (JDBC, .NET).";
+               exit 1 ;;
+          esac
 
       # pg_dump refuses to dump a server newer than itself, so install the
       # client that matches the server's major version.
