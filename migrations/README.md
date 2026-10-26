@@ -22,6 +22,8 @@ is safe and changes nothing.
 | `009_goals.sql` | `goals` |
 | `010_user_preferences.sql` | `user_preferences` |
 | `011_rpc_functions.sql` | `update_expense_date`, `update_earning_date`, `split_expense` |
+| `012_recurring_idempotency.sql` | one transaction per recurring rule per day (unique index) |
+| `013_analytics_aggregates.sql` | `net_balance_before`, `category_first_expense` (analytics, defects 7 and 8) |
 
 The order is a dependency order, not a preference. `currencies` and
 `categories` come first because almost everything references them;
@@ -43,17 +45,15 @@ Every table has RLS enabled and a policy. Three shapes are used:
 - **`currencies`** — no `user_id` at all. Any authenticated user may read;
   writes are left to the service role.
 
-**The backend does not exercise these policies.** Every module imports
-`supabase_admin` from `app/database.py`, the service role client, which
-bypasses RLS entirely. At runtime, tenant isolation rests on the
-`.eq("user_id", ...)` filter written by hand in each service function.
+**The backend exercises these policies** since 18/10 (defect 6). Each
+request gets a Supabase client carrying the user's own token, so every
+query — the RPC functions included, which are `security invoker` — runs
+under the user's policies, on top of the `.eq("user_id", ...)` filter each
+service still writes. Only the scheduler and account deletion use the
+service role, which bypasses RLS.
 
-The policies are still worth having — they are what protects the data if the
-frontend ever queries Supabase directly with the anon key, and they are a
-second line of defence if one of those hand-written filters is ever missed.
-But they should not be read as "the backend is protected by RLS". Testing
-isolation therefore means testing the API with two real accounts, which is
-what `tests/test_isolation.py` does.
+Policies are verified the only way that counts: the API, tested with two
+real accounts, in `tests/test_isolation.py`.
 
 ## Generated columns
 
@@ -72,8 +72,11 @@ in a request body. That is why changing a transaction date goes through
 
 ## Executed
 
-On 18/10/2026 all thirteen files ran start to finish, in order, on a fresh
-Supabase project, which is now the project's production database. Checked
+On 18/10/2026 files 000 to 012 ran start to finish, in order, on a fresh
+Supabase project, which is now the project's production database. Every
+later file runs there before the pull request that needs it is merged.
+`.github/workflows/schema-check.yml` compares production with this folder
+on every change to it and fails if they differ. Checked
 afterwards in the SQL editor:
 
 ```sql

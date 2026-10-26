@@ -8,7 +8,9 @@
 | 4 | POST /process recorría todos los usuarios | Media | 11/10/2026 | 11/10/2026 | Corregido | bb9b2c8 |
 | 5 | Borrar categoría reescribía historial | Media | 11/10/2026 | 11/10/2026 | Corregido | bb9b2c8 |
 | 6 | API no aplica políticas por fila | Alta | 11/10/2026 | 18/10/2026 | Corregido y desplegado | 9311557 |
-| 7–10 | Cálculos de analítica | Media | 11/10/2026 | | Abierto (xfail) | |
+| 7 | Patrimonio neto: descartaba el historial anterior a la ventana | Media | 11/10/2026 | | Decisión comunicada por el coach el 23/10; acta pendiente de firma | 364cb99 |
+| 8 | Tendencias: promediaba meses en que la categoría no existía | Media | 11/10/2026 | | Decisión comunicada por el coach el 23/10; acta pendiente de firma | 364cb99 |
+| 9–10 | Proyección: variación y vista semanal | Media | 11/10/2026 | | Abierto (xfail) | |
 | 11 | Tasa de cambio guardaba `"now()"` como fecha | Alta | 11/10/2026 | 18/10/2026 | Corregido | 725600c |
 | 12 | Front: recargar cerraba la sesión en desarrollo | Media | 18/10/2026 | 18/10/2026 | Corregido | front 82571c6 |
 | 13 | Front: el 409 de categorías no mostraba el motivo | Baja | 18/10/2026 | 18/10/2026 | Corregido | front e6c88aa |
@@ -402,19 +404,27 @@ mattered.
 
 ### 7–10. Analytics calculations
 
-**Waiting on:** the coach's decision (`docs/decisiones/`). Until it exists,
-the four `xfail(strict=True)` tests in `tests/test_analytics_calcs.py` stay
-as they are.
+**Decision:** option A on all four, communicated by the coach on 23/10.
+**The signed acta is still pending** (`docs/decisiones/`). Until it is there,
+none of the four counts as fixed, and if a signed option differs from A,
+that calculation is redone.
 
-**7. Net worth discards the history it fetched.** `get_net_worth_history`
-queries every row with no lower bound, then keeps only the months inside the
-window and starts the running total at zero. Someone with years of savings
-and a flat month sees 0.
+**7. Net worth discarded the history it fetched.** — *Code ready, commit
+`364cb99`; acta pending.* `get_net_worth_history` queried every row with no
+lower bound, kept only the months inside the window and started the running
+total at zero. Someone with years of savings and a flat month saw 0. Now
+the window's queries have a lower bound and the total starts at the balance
+before the window, summed in the database (`net_balance_before`, migration
+013). The response adds `opening_balance`.
 
-**8. Trend averages count months that did not exist.**
-`get_spending_trends` averages with `monthly.get(m, 0)`, so a category
-created last month is averaged over months of zeros, deflating the average
-and inflating `pct_vs_avg`.
+**8. Trend averages counted months that did not exist.** — *Code ready,
+commit `364cb99`; acta pending.* `get_spending_trends` averaged with
+`monthly.get(m, 0)` over the whole window, so a category created last month
+was averaged over months of zeros, deflating the average and inflating
+`pct_vs_avg`. Now each category is averaged from the month of its first
+expense ever (`category_first_expense`, migration 013), or over the whole
+window if that is earlier. A month without spending after the first one
+still counts as zero: that is option A; option B would have skipped it.
 
 **9. Projected variance compares different spans.** `total_projected`
 accumulates past and future months, `total_real` only past ones, and the

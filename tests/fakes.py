@@ -1,11 +1,12 @@
 """
 A stand-in for the Supabase client, good enough for the analytics layer.
 
-Worth stating why this is possible at all: there is not a single .rpc() call
-anywhere in app/analytics/service.py. Every figure the dashboard shows is a
-plain .select() followed by arithmetic in Python. So the whole module can be
-tested by handing it rows and checking the numbers, with no database and no
-assertions about SQL.
+Almost every figure the dashboard shows is a plain .select() followed by
+arithmetic in Python, so the analytics can be tested by handing them rows and
+checking the numbers, with no database. The two exceptions are the aggregates
+in migration 013, called over .rpc(). The stub computes those from the same
+rows, in Python, with the semantics of the SQL; any other function name
+raises, as PostgREST does for a function that does not exist.
 
 The stub applies eq / gte / lte / lt / gt / in_ filters for real rather than
 ignoring them. That matters: some of the behaviour under test is about which
@@ -14,6 +15,7 @@ everything regardless would hide exactly the bugs worth finding.
 """
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from postgrest.exceptions import APIError
@@ -223,6 +225,57 @@ class FakeQuery:
         return FakeResult(rows)
 
 
+def _net_balance_before(store: dict, p_user_id: str, p_before: str) -> list[dict]:
+    def total(table: str) -> Decimal:
+        return sum(
+            (Decimal(str(r["amount_mxn"])) for r in store.get(table, [])
+             if r.get("user_id") == p_user_id and r["date"] < p_before),
+            Decimal("0"),
+        )
+    # PostgREST sends numeric as a JSON number.
+    return [{"balance": float(total("earnings") - total("expenses"))}]
+
+
+def _category_first_expense(store: dict, p_user_id: str) -> list[dict]:
+    first: dict = {}
+    for r in store.get("expenses", []):
+        if r.get("user_id") != p_user_id:
+            continue
+        cat = r.get("category_id")
+        if cat not in first or r["date"] < first[cat]:
+            first[cat] = r["date"]
+    return [{"category_id": c, "first_date": d} for c, d in first.items()]
+
+
+RPC_FUNCTIONS = {
+    "net_balance_before": _net_balance_before,
+    "category_first_expense": _category_first_expense,
+}
+
+
+class FakeRpc:
+    def __init__(self, name: str, params: dict, store: dict, log: list) -> None:
+        self._name = name
+        self._params = params
+        self._store = store
+        self._log = log
+
+    def execute(self) -> FakeResult:
+        self._log.append({
+            "table": None, "op": "rpc", "function": self._name,
+            "filters": [], "payload": dict(self._params),
+        })
+        func = RPC_FUNCTIONS.get(self._name)
+        if func is None:
+            raise APIError({
+                "code": "PGRST202",
+                "message": f"Could not find the function public.{self._name}",
+                "details": None,
+                "hint": None,
+            })
+        return FakeResult(func(self._store, **self._params))
+
+
 class FakeSupabase:
     """
     Hand it a dict of {table_name: [row, ...]} and it answers queries from
@@ -236,6 +289,9 @@ class FakeSupabase:
 
     def table(self, name: str) -> FakeQuery:
         return FakeQuery(name, self.store, self.queries)
+
+    def rpc(self, name: str, params: dict) -> FakeRpc:
+        return FakeRpc(name, params, self.store, self.queries)
 
     def filters_for(self, table: str) -> list[list[tuple]]:
         return [q["filters"] for q in self.queries if q["table"] == table]

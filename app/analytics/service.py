@@ -857,22 +857,41 @@ async def get_net_worth_history(
 
     This shows wealth accumulation trajectory — not just monthly cash flow.
     A positive slope means the user is building wealth.
+
+    Everything before the window is one figure, the opening balance, summed
+    in the database (net_balance_before, migration 013). Only the window's
+    own rows are read. The running total starts at that balance, so a flat
+    month after years of saving shows the savings, not zero (defect 7).
     """
     month_range = get_month_range(months_back)
+    first_month = month_range[0]
     last_month  = month_range[-1]
 
-    end_date = date(
+    start_date = date(first_month[0], first_month[1], 1)
+    end_date   = date(
         last_month[0],
         last_month[1],
         calendar.monthrange(last_month[0], last_month[1])[1]
     )
 
-    # Fetch ALL earnings and expenses up to end of period
+    opening = (
+        db()
+        .rpc("net_balance_before", {
+            "p_user_id": user_id,
+            "p_before":  start_date.isoformat(),
+        })
+        .execute()
+    ).data or []
+    opening_balance = (
+        Decimal(str(opening[0]["balance"])) if opening else Decimal("0")
+    )
+
     all_earnings = (
         db()
         .table("earnings")
         .select("amount_mxn, date")
         .eq("user_id", user_id)
+        .gte("date", start_date.isoformat())
         .lte("date", end_date.isoformat())
         .execute()
     ).data or []
@@ -882,6 +901,7 @@ async def get_net_worth_history(
         .table("expenses")
         .select("amount_mxn, date")
         .eq("user_id", user_id)
+        .gte("date", start_date.isoformat())
         .lte("date", end_date.isoformat())
         .execute()
     ).data or []
@@ -906,7 +926,7 @@ async def get_net_worth_history(
 
     # Build cumulative net worth
     data_points      = []
-    cumulative       = Decimal("0")
+    cumulative       = opening_balance
 
     for y, m in month_range:
         income   = monthly[(y, m)]["income"]
@@ -924,6 +944,7 @@ async def get_net_worth_history(
     return {
         "months":          data_points,
         "current_worth":   data_points[-1]["net_worth"] if data_points else Decimal("0"),
+        "opening_balance": round(opening_balance, 2),
         "period_months":   months_back,
     }
 
@@ -1012,6 +1033,11 @@ async def get_spending_trends(
     Stable = within ±10% of average
     Up     = more than +10% above average
     Down   = more than -10% below average
+
+    The average runs from the month of the category's first expense ever
+    (category_first_expense, migration 013), or over the whole window if
+    that is earlier. Months before the category was first used do not
+    count; months without spending after it do, as zero (defect 8).
     """
     today       = date.today()
     month_range = get_month_range(months_back)
@@ -1062,6 +1088,17 @@ async def get_spending_trends(
             cat_monthly[cat_id].get(key, Decimal("0")) + amount
         )
 
+    # First month each category was used, over the user's whole history.
+    first_rows = (
+        db()
+        .rpc("category_first_expense", {"p_user_id": user_id})
+        .execute()
+    ).data or []
+    first_month: dict = {}
+    for row in first_rows:
+        first = date.fromisoformat(row["first_date"])
+        first_month[row["category_id"] or "uncategorized"] = (first.year, first.month)
+
     # Calculate trends
     current_key   = (today.year, today.month)
     past_months   = [k for k in month_range if k != current_key]
@@ -1069,15 +1106,24 @@ async def get_spending_trends(
 
     for cat_id, monthly in cat_monthly.items():
         current_spend = monthly.get(current_key, Decimal("0"))
-        past_values   = [
-            monthly.get(m, Decimal("0"))
-            for m in past_months
-        ]
 
-        if not past_values:
+        if not past_months:
             continue
 
-        avg_spend = sum(past_values) / len(past_values)
+        # Every category here has rows in the window, so the function has a
+        # row for it too. Falling back to the earliest month seen keeps the
+        # rule if it ever does not.
+        since       = first_month.get(cat_id, min(monthly))
+        past_values = [
+            monthly.get(m, Decimal("0"))
+            for m in past_months
+            if m >= since
+        ]
+
+        # A category first used this month has no history to compare with.
+        avg_spend = (
+            sum(past_values) / len(past_values) if past_values else Decimal("0")
+        )
 
         if avg_spend > 0:
             pct_vs_avg = round((current_spend - avg_spend) / avg_spend * 100, 1)
