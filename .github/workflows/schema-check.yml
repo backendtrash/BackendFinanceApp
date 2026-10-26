@@ -116,10 +116,13 @@ jobs:
           "$BIN/pg_dump" "$LOCAL_URL" $OPTS --file=migrations-schema.sql
 
       # Drop what differs for reasons that are not the schema: comments,
-      # session settings, and the random \restrict token newer pg_dump adds.
+      # session settings, the random \restrict token newer pg_dump adds, and
+      # Windows line endings. Function bodies keep the line endings of
+      # whatever ran them: pasted into the SQL editor from Windows, they are
+      # stored with \r\n, while migrations/ uses \n. PostgreSQL ignores both.
       - name: Compare
         run: |
-          norm() { grep -vE '^(--|SET |SELECT pg_catalog\.set_config|\\(un)?restrict )' "$1" | sed '/^[[:space:]]*$/d'; }
+          norm() { sed 's/\r$//' "$1" | grep -vE '^(--|SET |SELECT pg_catalog\.set_config|[\\](un)?restrict )' | sed '/^[[:space:]]*$/d'; }
           norm production-schema.sql > production.norm
           norm migrations-schema.sql > migrations.norm
           if diff -u migrations.norm production.norm > schema.diff; then
