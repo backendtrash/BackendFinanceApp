@@ -1,0 +1,97 @@
+name: backup
+
+# Weekly encrypted backup of the production database (AP-8).
+#
+# The Supabase free plan has no automatic backups, and this database holds
+# users' financial records. Every Sunday this dumps the app's data, encrypts
+# it, proves the encrypted file can be restored, and keeps it for 90 days.
+#
+# Why encrypted: this repository is public, and any signed-in GitHub user can
+# download a public repository's workflow artifacts. Without the passphrase
+# the file is unreadable. Lose the passphrase and the backups are lost with
+# it — keep it outside the repository.
+#
+# Secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_DB_URL     Supabase -> Connect -> Session pooler URI, with the
+#                       database password filled in. Not the direct
+#                       connection: on the free plan it is IPv6-only, and
+#                       GitHub's runners cannot reach IPv6.
+#   BACKUP_PASSPHRASE   any long passphrase you choose
+#
+# How to restore: docs/respaldos.md.
+
+on:
+  schedule:
+    - cron: "0 9 * * 0"   # Sundays 09:00 UTC (03:00 in Juárez)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+
+    steps:
+      - name: Check the secrets are set
+        run: |
+          [ -n "$DB_URL" ]     || { echo "::error::SUPABASE_DB_URL is not set"; exit 1; }
+          [ -n "$PASSPHRASE" ] || { echo "::error::BACKUP_PASSPHRASE is not set"; exit 1; }
+
+      # pg_dump refuses to dump a server newer than itself, so install the
+      # client that matches the server's major version.
+      - name: Detect the server version
+        id: server
+        run: |
+          NUM=$(psql "$DB_URL" -tAc "show server_version_num")
+          echo "major=$((NUM / 10000))" >> "$GITHUB_OUTPUT"
+          echo "PostgreSQL server major version: $((NUM / 10000))"
+
+      - name: Install a matching pg_dump
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq "postgresql-client-${{ steps.server.outputs.major }}"
+
+      # The app's tables live in public. auth.users is included because every
+      # user table references it: without it the data could not be restored.
+      - name: Dump and encrypt
+        id: dump
+        run: |
+          BIN="/usr/lib/postgresql/${{ steps.server.outputs.major }}/bin"
+          FILE="backendfinance-$(date -u +%Y-%m-%d).dump.gpg"
+          "$BIN/pg_dump" "$DB_URL" --format=custom --no-owner --no-privileges \
+            --schema=public --table=auth.users --file=backup.dump
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$PASSPHRASE" \
+            --symmetric --cipher-algo AES256 --output "$FILE" backup.dump
+          rm -f backup.dump
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          ls -l "$FILE"
+
+      # A backup nobody has restored is a hope, not a backup. Decrypt it with
+      # the same passphrase and read its table of contents; fail the run if
+      # the app's data is not in it.
+      - name: Prove the backup can be restored
+        run: |
+          BIN="/usr/lib/postgresql/${{ steps.server.outputs.major }}/bin"
+          gpg --batch --pinentry-mode loopback --passphrase "$PASSPHRASE" \
+            --decrypt "${{ steps.dump.outputs.file }}" > check.dump
+          "$BIN/pg_restore" --list check.dump > toc.txt
+          rm -f check.dump
+          for t in expenses earnings categories budgets recurring_rules goals projected_costs user_preferences currencies users; do
+            grep -qE "TABLE DATA (public|auth) $t( |$)" toc.txt || { echo "::error::no data for $t in the backup"; exit 1; }
+          done
+          echo "Tables with data in the backup: $(grep -c 'TABLE DATA' toc.txt)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.dump.outputs.file }}
+          path: ${{ steps.dump.outputs.file }}
+          retention-days: 90
+          if-no-files-found: error
