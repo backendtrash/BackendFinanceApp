@@ -82,13 +82,15 @@ jobs:
 
       # The app's tables live in public. auth.users is included because every
       # user table references it: without it the data could not be restored.
+      # Both go in as --table: pg_dump ignores --schema once --table is given,
+      # so "--schema=public --table=auth.users" dumps auth.users alone.
       - name: Dump and encrypt
         id: dump
         run: |
           BIN="/usr/lib/postgresql/${{ steps.server.outputs.major }}/bin"
           FILE="backendfinance-$(date -u +%Y-%m-%d).dump.gpg"
           "$BIN/pg_dump" "$DB_URL" --format=custom --no-owner --no-privileges \
-            --schema=public --table=auth.users --file=backup.dump
+            --table='public.*' --table=auth.users --file=backup.dump
           gpg --batch --yes --pinentry-mode loopback --passphrase "$PASSPHRASE" \
             --symmetric --cipher-algo AES256 --output "$FILE" backup.dump
           rm -f backup.dump
