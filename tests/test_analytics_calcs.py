@@ -6,7 +6,7 @@ notices". The dashboard is the most-read surface in the product and the
 least verifiable by eye: every figure is a Decimal sum over rows the user
 cannot see, so a wrong total looks exactly like a right one.
 
-Four tests at the end are marked xfail. They are not scaffolding. Each
+Two tests at the end are marked xfail. They are not scaffolding. Each
 encodes the value the function should return, fails against what it returns
 today, and names the defect. strict=True means they flip to failures the
 moment a fix lands, so none can be quietly forgotten.
@@ -218,25 +218,13 @@ async def test_net_worth_accumulates_month_on_month(monkeypatch):
     assert all(m["monthly_delta"] == Decimal("600") for m in result["months"])
 
 
-# ── Known defects ─────────────────────────────────────────────────────────
-# Each of the four below asserts the correct answer and fails today.
-
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="net worth ignores everything before the window: the queries have "
-           "no lower bound, but the buckets are pre-seeded only for the "
-           "months in range, so earlier rows are fetched and then dropped "
-           "(analytics/service.py:892-907)",
-)
-async def test_net_worth_should_include_history_before_the_window(monkeypatch):
+async def test_net_worth_includes_history_before_the_window(monkeypatch):
     """
-    Someone with 50,000 saved over years, who then has a flat month, has a
-    net worth of 50,000 — not 0.
+    Defect 7. Someone with 50,000 saved over years, who then has a flat
+    month, has a net worth of 50,000 — not 0.
 
-    The function fetches every row ever written (lte end_date, no gte), so
-    it pays the full cost of reading that history and then discards it,
-    because `if key in monthly` only keeps months inside the window.
+    It used to fetch every row ever written (no lower bound), then drop the
+    ones before the window and start the running total at zero.
     """
     y0, _ = _months_ago(0)
 
@@ -247,24 +235,61 @@ async def test_net_worth_should_include_history_before_the_window(monkeypatch):
 
     result = await service.get_net_worth_history(USER, months_back=3)
     assert result["current_worth"] == Decimal("50000")
+    assert result["opening_balance"] == Decimal("50000")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="spending trends average over months the category did not exist, "
-           "counting them as zero and dragging the average down "
-           "(analytics/service.py:1082)",
-)
-async def test_spending_trend_average_should_ignore_months_with_no_data(monkeypatch):
+async def test_net_worth_starts_at_the_opening_balance_and_reads_only_the_window(monkeypatch):
     """
-    A category created last month, with 500 spent in its only full month,
-    has an average of 500. The function reports 125.
+    The opening balance nets earlier income against earlier spending, and
+    the window's months add to it. The history itself is summed in the
+    database: the row queries carry a lower bound, so an old account does
+    not mean reading every row it ever had.
+    """
+    y2, m2 = _months_ago(2)
+    y1, m1 = _months_ago(1)
+    y0, m0 = _months_ago(0)
 
-    With months_back=5 there are four past months, and past_values fills the
-    three before the category existed with Decimal("0") via monthly.get(m, 0).
-    500 / 4 = 125. The current month's 500 then reads as +300% against that
-    average and the dashboard arrow says "up" for spending that is flat.
+    fake = _use(monkeypatch, FakeSupabase(
+        earnings=[
+            _earning(50000, 1, year=y0 - 3, month=1),
+            _earning(1000, 1, year=y2, month=m2),
+            _earning(1000, 1, year=y1, month=m1),
+            _earning(1000, 1, year=y0, month=m0),
+        ],
+        expenses=[
+            _expense(20000, 1, CAT_RENT, year=y0 - 2, month=1),
+            _expense(400, 2, CAT_FOOD, year=y2, month=m2),
+            _expense(400, 2, CAT_FOOD, year=y1, month=m1),
+            _expense(400, 2, CAT_FOOD, year=y0, month=m0),
+        ],
+    ))
+
+    result = await service.get_net_worth_history(USER, months_back=3)
+
+    assert result["opening_balance"] == Decimal("30000")
+    assert [m["net_worth"] for m in result["months"]] == [
+        Decimal("30600"), Decimal("31200"), Decimal("31800"),
+    ]
+    window_start = date(y2, m2, 1).isoformat()
+    for table in ("earnings", "expenses"):
+        assert ("gte", "date", window_start) in fake.filters_for(table)[0]
+
+
+# ── get_spending_trends ───────────────────────────────────────────────────
+
+def _food_trend(result):
+    return next(t for t in result["trends"] if t["category_id"] == CAT_FOOD)
+
+
+async def test_spending_trend_averages_from_the_category_first_month(monkeypatch):
+    """
+    Defect 8. A category first used last month, with 500 spent in its only
+    full month, has an average of 500.
+
+    It used to report 125: with months_back=5 there are four past months,
+    and the three before the category existed counted as zeros. The
+    current month's 500 then read as +300% and the arrow said "up" for
+    spending that is flat.
     """
     y1, m1 = _months_ago(1)
     y0, m0 = _months_ago(0)
@@ -277,11 +302,104 @@ async def test_spending_trend_average_should_ignore_months_with_no_data(monkeypa
         categories=[{"id": CAT_FOOD, "name": "Food", "color": "#FF0000"}],
     ))
 
-    result = await service.get_spending_trends(USER, months_back=5)
-    food = next(t for t in result["trends"] if t["category_id"] == CAT_FOOD)
+    food = _food_trend(await service.get_spending_trends(USER, months_back=5))
 
     assert food["avg_monthly"] == Decimal("500.00")
     assert food["direction"] == "stable"
+
+
+async def test_spending_trend_counts_a_month_without_spending_after_the_first(monkeypatch):
+    """
+    Option A, not B: a month with no spending after the category's first
+    expense is a real zero, and stays in the average.
+
+    600, nothing, 600 → 400. Ignoring the empty month would give 600; the
+    old code, counting the month before the first expense too, gave 300.
+    """
+    y3, m3 = _months_ago(3)
+    y1, m1 = _months_ago(1)
+    y0, m0 = _months_ago(0)
+
+    _use(monkeypatch, FakeSupabase(
+        expenses=[
+            _expense(600, 1, CAT_FOOD, year=y3, month=m3),
+            _expense(600, 1, CAT_FOOD, year=y1, month=m1),
+            _expense(400, 1, CAT_FOOD, year=y0, month=m0),
+        ],
+        categories=[{"id": CAT_FOOD, "name": "Food", "color": "#FF0000"}],
+    ))
+
+    food = _food_trend(await service.get_spending_trends(USER, months_back=5))
+
+    assert food["avg_monthly"] == Decimal("400.00")
+    assert food["direction"] == "stable"
+
+
+async def test_spending_trend_uses_the_whole_window_for_an_older_category(monkeypatch):
+    """
+    A category first used before the window averages over every past month
+    of the window, empty ones included. The expense a year ago only says
+    when the category started; its amount is outside the window.
+    """
+    y12, m12 = _months_ago(12)
+    y1, m1 = _months_ago(1)
+    y0, m0 = _months_ago(0)
+
+    _use(monkeypatch, FakeSupabase(
+        expenses=[
+            _expense(9999, 1, CAT_FOOD, year=y12, month=m12),
+            _expense(400, 1, CAT_FOOD, year=y1, month=m1),
+            _expense(100, 1, CAT_FOOD, year=y0, month=m0),
+        ],
+        categories=[{"id": CAT_FOOD, "name": "Food", "color": "#FF0000"}],
+    ))
+
+    food = _food_trend(await service.get_spending_trends(USER, months_back=5))
+
+    # 400 over the four past months
+    assert food["avg_monthly"] == Decimal("100.00")
+    assert food["current_month"] == Decimal("100.00")
+    assert food["direction"] == "stable"
+
+
+async def test_spending_trend_for_a_category_first_used_this_month(monkeypatch):
+    """No past months to average: the average is 0 and the trend stable."""
+    y0, m0 = _months_ago(0)
+
+    _use(monkeypatch, FakeSupabase(
+        expenses=[_expense(300, 1, CAT_FOOD, year=y0, month=m0)],
+        categories=[{"id": CAT_FOOD, "name": "Food", "color": "#FF0000"}],
+    ))
+
+    food = _food_trend(await service.get_spending_trends(USER, months_back=5))
+
+    assert food["avg_monthly"] == Decimal("0")
+    assert food["direction"] == "stable"
+
+
+async def test_spending_trend_treats_uncategorized_expenses_as_one_category(monkeypatch):
+    """Expenses with no category share one first month, from the same function."""
+    y2, m2 = _months_ago(2)
+    y0, m0 = _months_ago(0)
+
+    _use(monkeypatch, FakeSupabase(
+        expenses=[
+            _expense(300, 1, None, year=y2, month=m2),
+            _expense(100, 1, None, year=y0, month=m0),
+        ],
+        categories=[],
+    ))
+
+    result = await service.get_spending_trends(USER, months_back=5)
+    other = next(t for t in result["trends"] if t["category_id"] == "uncategorized")
+
+    # 300 and an empty month since its first use → 150
+    assert other["avg_monthly"] == Decimal("150.00")
+    assert other["category_name"] == "Uncategorized"
+
+
+# ── Known defects ─────────────────────────────────────────────────────────
+# Each of the two below asserts the correct answer and fails today.
 
 
 @pytest.mark.xfail(
