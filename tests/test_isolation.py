@@ -302,6 +302,25 @@ def test_user_b_analytics_excludes_user_a_amounts(client_b, owned_rows):
     )
 
 
+def test_the_export_holds_only_the_callers_rows(client_a, client_b, owned_rows):
+    """
+    The export reads every table at once, so one missed filter would hand
+    over a whole table. A's file must hold A's rows, and B's none of them.
+    """
+    a_ids = {row_id for _, row_id in owned_rows.values()}
+
+    def ids_in(client) -> set:
+        response = client.get("/api/v1/export")
+        assert response.status_code == 200, response.text[:200]
+        return {
+            row["id"]
+            for rows in response.json()["tables"].values() for row in rows
+        }
+
+    assert a_ids <= ids_in(client_a), "user A's export is missing user A's rows"
+    assert not a_ids & ids_in(client_b), "user A's rows are in user B's export"
+
+
 def test_each_user_has_their_own_preferences(client_a, client_b):
     """
     Preferences are one row per user. Writing A's must not move B's.

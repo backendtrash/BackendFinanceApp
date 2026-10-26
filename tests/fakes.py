@@ -21,6 +21,9 @@ from typing import Any
 from postgrest.exceptions import APIError
 
 
+MAX_ROWS = 1000
+
+
 class FakeResult:
     def __init__(self, data: Any) -> None:
         self.data = data
@@ -108,6 +111,10 @@ class FakeQuery:
 
     def limit(self, count: int) -> "FakeQuery":
         self._limit = count
+        return self
+
+    def range(self, start: int, end: int) -> "FakeQuery":
+        self._range = (start, end)
         return self
 
     def single(self) -> "FakeQuery":
@@ -202,6 +209,11 @@ class FakeQuery:
             rows.sort(key=lambda r: (r.get(column) is None, r.get(column)), reverse=desc)
         if self._limit is not None:
             rows = rows[: self._limit]
+        start, end = getattr(self, "_range", (0, None))
+        rows = rows[start:] if end is None else rows[start:end + 1]
+        # Supabase's PostgREST answers at most MAX_ROWS rows, whatever was
+        # asked for, and says nothing about the rest.
+        rows = rows[:MAX_ROWS]
 
         # Mirrors postgrest-py exactly, because the difference is where bugs
         # hide. .single() demands exactly one row and RAISES otherwise — it
