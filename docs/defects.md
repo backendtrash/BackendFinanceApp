@@ -23,6 +23,8 @@
 | 22 | El workflow de CI nunca llegó a ejecutar una prueba | Alta | 18/10/2026 | 18/10/2026 | Corregido | c43e7c6 |
 | 23 | Front: la pantalla de inicio mostraba el apodo interno "BudgetTrash" | Baja | 19/10/2026 | 19/10/2026 | Corregido | front 7873adb |
 | 24 | El registro no pedía aceptar el Aviso de Privacidad (RF01) | Alta | 19/10/2026 | 19/10/2026 | Corregido | 2a92fbe · front 4055134 |
+| 25 | Parte de la contraseña de la base de producción quedó en un log público | Alta | 25/10/2026 | 25/10/2026 | Corregido | a31d247 |
+| 26 | El primer respaldo solo contenía la lista de usuarios, sin los datos | Media | 25/10/2026 | 25/10/2026 | Corregido | aeba9d1 |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -294,34 +296,6 @@ variables: exit 4 before, 219 passed after.
 The lesson for the process: a check is only evidence once it has been seen
 to pass *and* seen to fail for the right reason.
 
----
-
-## Open
-
-### 7–10. Analytics calculations
-
-**Waiting on:** the coach's decision (`docs/decisiones/`). Until it exists,
-the four `xfail(strict=True)` tests in `tests/test_analytics_calcs.py` stay
-as they are.
-
-**7. Net worth discards the history it fetched.** `get_net_worth_history`
-queries every row with no lower bound, then keeps only the months inside the
-window and starts the running total at zero. Someone with years of savings
-and a flat month sees 0.
-
-**8. Trend averages count months that did not exist.**
-`get_spending_trends` averages with `monthly.get(m, 0)`, so a category
-created last month is averaged over months of zeros, deflating the average
-and inflating `pct_vs_avg`.
-
-**9. Projected variance compares different spans.** `total_projected`
-accumulates past and future months, `total_real` only past ones, and the
-response reports the difference.
-
-**10. The weekly view disagrees with the monthly rollup.** A weekly
-projected cost with no `day_of_week` is added in full to every week bucket,
-so a 500/week cost shows 2500 in a five-week month against 2166.67 monthly.
-
 ### 15. "Delete account" called an endpoint that did not exist
 
 **Severity:** medium · **Found:** 18/10 · **Fixed:** commit `5fa2838` on 18/10, in `main` on 19/10 (PR #6)
@@ -381,6 +355,74 @@ little room for harm. Measured in production: the API was not yet
 enforcing consent at 18:30:31 and was at 18:32:17; the frontend that sends
 the field was live by 18:31. If registration failed at all, it was for
 seconds to a couple of minutes, not hours — but zero cannot be shown.
+
+### 25. Part of the production database password was printed in a public log
+
+**Severity:** high — production credentials, public repository
+**Found:** 25/10, ~21:25, on the first backup run with the pooler URI ·
+**Fixed:** 25/10, commit `a31d247` (PR #12, in `main` at 21:29); password
+rotated and confirmed by backup run #6 at 21:43
+
+The database password contained `%`. In a URI, `%` starts an encoded
+character, so psql rejected the connection string and quoted the offending
+piece of it — part of the password — in the error. GitHub hides a secret
+only when it appears whole, so the fragment showed up in the run's log,
+which anyone can read on a public repository.
+
+What was done: the run was deleted; the password was reset in Supabase to
+letters and numbers only; the `SUPABASE_DB_URL` secret was updated. The old
+password no longer works, so the fragment is useless even if it was copied.
+Both workflows that use the database (`backup.yml`, `schema-check.yml`) now
+extract the password from the URI and register it with `::add-mask::`
+before anything can print it, and refuse a password with `%` with a message
+that names the problem instead of quoting it. The next wrong password
+(run #4) failed without printing any of it.
+
+### 26. The first backup held the user list and none of the app's data
+
+**Severity:** medium — caught before any backup was relied on
+**Found:** 25/10, 21:37, by the backup's own restore check (run #5) ·
+**Fixed:** 25/10, commit `aeba9d1` (PR #13, in `main` at 21:42)
+
+`pg_dump --schema=public --table=auth.users` was meant as "public plus
+auth.users". pg_dump ignores `--schema` once `--table` is given, so it
+dumped `auth.users` alone. The run failed at "Prove the backup can be
+restored" with "no data for expenses", and uploaded nothing. Both are now
+selected as tables, `--table='public.*' --table=auth.users`. Verified on the
+branch (run #6) and on `main` (run #7): green, with the check finding data
+for all ten tables.
+
+This is the reason the check exists: the dump and the encryption both
+succeeded, and only reading the file back showed it was empty of what
+mattered.
+
+---
+
+## Open
+
+### 7–10. Analytics calculations
+
+**Waiting on:** the coach's decision (`docs/decisiones/`). Until it exists,
+the four `xfail(strict=True)` tests in `tests/test_analytics_calcs.py` stay
+as they are.
+
+**7. Net worth discards the history it fetched.** `get_net_worth_history`
+queries every row with no lower bound, then keeps only the months inside the
+window and starts the running total at zero. Someone with years of savings
+and a flat month sees 0.
+
+**8. Trend averages count months that did not exist.**
+`get_spending_trends` averages with `monthly.get(m, 0)`, so a category
+created last month is averaged over months of zeros, deflating the average
+and inflating `pct_vs_avg`.
+
+**9. Projected variance compares different spans.** `total_projected`
+accumulates past and future months, `total_real` only past ones, and the
+response reports the difference.
+
+**10. The weekly view disagrees with the monthly rollup.** A weekly
+projected cost with no `day_of_week` is added in full to every week bucket,
+so a 500/week cost shows 2500 in a five-week month against 2166.67 monthly.
 
 ---
 
