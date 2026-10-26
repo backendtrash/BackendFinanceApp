@@ -28,6 +28,7 @@
 | 25 | Parte de la contraseña de la base de producción quedó en un log público | Alta | 25/10/2026 | 25/10/2026 | Corregido | a31d247 |
 | 26 | El primer respaldo solo contenía la lista de usuarios, sin los datos | Media | 25/10/2026 | 25/10/2026 | Corregido | aeba9d1 |
 | 27 | La verificación del esquema marcaba una diferencia que solo eran saltos de línea | Baja | 25/10/2026 | 25/10/2026 | Corregido | 312cc87 |
+| 28 | Front: "Exportar datos" y "Reiniciar espacio" llaman rutas que el backend no tiene | Media | 25/10/2026 | | Abierto | |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -452,6 +453,34 @@ response reports the difference.
 **10. The weekly view disagrees with the monthly rollup.** A weekly
 projected cost with no `day_of_week` is added in full to every week bucket,
 so a 500/week cost shows 2500 in a five-week month against 2166.67 monthly.
+
+### 28. Two Settings buttons call routes the backend does not have
+
+**Severity:** medium · **Repo:** frontend, against this API
+**Found:** 25/10, ~22:15, while checking defects 7 and 8 in production ·
+**Status:** open — *Export* to be built in the backend, *Reset* removed
+from the frontend (decided 25/10)
+
+Listing every path the frontend's `src/api/` calls, and probing them in
+production as `prueba-a`, two buttons in Settings answer 404:
+
+| Frontend | Calls | Production |
+|---|---|---|
+| Settings → *Export all data* | `GET /api/v1/export` | 404 |
+| Settings → *Reset workspace* | `DELETE /api/v1/workspace/reset` | 404 (a GET is also 404, so no route exists under any method) |
+
+*Export* has no error handling, so the button does nothing visible.
+Nothing is lost or exposed: each call fails before reaching data. The
+privacy notice does not promise an export — rights requests go by email —
+so no commitment is broken.
+
+A third path, `/api/v1/sinking-funds`, also answers 404, but nothing calls
+it: the query was switched off on 18/10 with defect 14. This entry first
+listed it as a live call; that was wrong, and corrected the same day.
+
+Found because H4 asks that every backend module answer the frontend: the
+isolation suite and the H3 navigation covered the main screens, not these
+two buttons.
 
 ---
 
