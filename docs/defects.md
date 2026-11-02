@@ -8,8 +8,8 @@
 | 4 | POST /process recorría todos los usuarios | Media | 11/10/2026 | 11/10/2026 | Corregido | bb9b2c8 |
 | 5 | Borrar categoría reescribía historial | Media | 11/10/2026 | 11/10/2026 | Corregido | bb9b2c8 |
 | 6 | API no aplica políticas por fila | Alta | 11/10/2026 | 18/10/2026 | Corregido y desplegado | 9311557 |
-| 7 | Patrimonio neto: descartaba el historial anterior a la ventana | Media | 11/10/2026 | | Decisión comunicada por el coach el 23/10; acta pendiente de firma | 364cb99 |
-| 8 | Tendencias: promediaba meses en que la categoría no existía | Media | 11/10/2026 | | Decisión comunicada por el coach el 23/10; acta pendiente de firma | 364cb99 |
+| 7 | Patrimonio neto: descartaba el historial anterior a la ventana | Media | 11/10/2026 | 01/11/2026 | Corregido (acta firmada, opción A) | 364cb99 |
+| 8 | Tendencias: promediaba meses en que la categoría no existía | Media | 11/10/2026 | 01/11/2026 | Corregido (acta firmada, opción A) | 364cb99 |
 | 9–10 | Proyección: variación y vista semanal | Media | 11/10/2026 | | Abierto (xfail) | |
 | 11 | Tasa de cambio guardaba `"now()"` como fecha | Alta | 11/10/2026 | 18/10/2026 | Corregido | 725600c |
 | 12 | Front: recargar cerraba la sesión en desarrollo | Media | 18/10/2026 | 18/10/2026 | Corregido | front 82571c6 |
@@ -461,33 +461,42 @@ Verified in production on 25/10: both test accounts get 200 and a file
 with only their own rows; `/api/v1/workspace/reset` is still 404, as
 intended, since nothing calls it.
 
+### 7. Net worth discarded the history it fetched
+
+**Severity:** medium · **Found:** 11/10 · **Fixed:** commit `364cb99` (PR #16,
+in `main` 25/10); **closed 01/11**, when the signed acta entered the
+repository (option A)
+
+`get_net_worth_history` queried every row with no lower bound, kept only
+the months inside the window and started the running total at zero.
+Someone with years of savings and a flat month saw 0. Now the window's
+queries have a lower bound and the total starts at the balance before the
+window, summed in the database (`net_balance_before`, migration 013). The
+response adds `opening_balance`.
+
+### 8. Trend averages counted months that did not exist
+
+**Severity:** medium · **Found:** 11/10 · **Fixed:** commit `364cb99` (PR #16,
+in `main` 25/10); **closed 01/11**, when the signed acta entered the
+repository (option A)
+
+`get_spending_trends` averaged with `monthly.get(m, 0)` over the whole
+window, so a category created last month was averaged over months of
+zeros, deflating the average and inflating `pct_vs_avg`. Now each category
+is averaged from the month of its first expense ever
+(`category_first_expense`, migration 013), or over the whole window if that
+is earlier. A month without spending after the first one still counts as
+zero: that is option A; option B would have skipped it.
+
 ---
 
 ## Open
 
 ### 7–10. Analytics calculations
 
-**Decision:** option A on all four, communicated by the coach on 23/10.
-**The signed acta is still pending** (`docs/decisiones/`). Until it is there,
-none of the four counts as fixed, and if a signed option differs from A,
-that calculation is redone.
-
-**7. Net worth discarded the history it fetched.** — *Code ready, commit
-`364cb99`; acta pending.* `get_net_worth_history` queried every row with no
-lower bound, kept only the months inside the window and started the running
-total at zero. Someone with years of savings and a flat month saw 0. Now
-the window's queries have a lower bound and the total starts at the balance
-before the window, summed in the database (`net_balance_before`, migration
-013). The response adds `opening_balance`.
-
-**8. Trend averages counted months that did not exist.** — *Code ready,
-commit `364cb99`; acta pending.* `get_spending_trends` averaged with
-`monthly.get(m, 0)` over the whole window, so a category created last month
-was averaged over months of zeros, deflating the average and inflating
-`pct_vs_avg`. Now each category is averaged from the month of its first
-expense ever (`category_first_expense`, migration 013), or over the whole
-window if that is earlier. A month without spending after the first one
-still counts as zero: that is option A; option B would have skipped it.
+**Decision:** option A on all four, in the signed acta
+`docs/decisiones/acta-analitica.pdf` (decided 23/10, in the repository
+01/11). 7 and 8 are fixed and listed under *Fixed*; 9 and 10 follow.
 
 **9. Projected variance compares different spans.** `total_projected`
 accumulates past and future months, `total_real` only past ones, and the
