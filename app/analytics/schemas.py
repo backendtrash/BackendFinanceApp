@@ -97,14 +97,17 @@ class CategoryAnalytics(BaseModel):
 class ProjectedDataPoint(BaseModel):
     """
     Single month data point comparing projected vs real spending.
-    projected_amount comes from recurring rules.
-    real_amount comes from actual recorded expenses.
-    variance is real - projected (negative = under budget).
+    projected_amount is the month's full projection (projected costs).
+    projected_to_date is the part that has elapsed: all of it in a past
+    month, up to today in the current one, nothing in a future one.
+    real_amount comes from actual recorded expenses, up to today.
+    variance is real - projected_to_date (negative = under plan).
     """
     month_label:       str
     year:              int
     month:             int
     projected_amount:  Decimal
+    projected_to_date: Decimal
     real_amount:       Decimal
     variance:          Decimal
     is_future:         bool
@@ -113,13 +116,15 @@ class ProjectedDataPoint(BaseModel):
 class ProjectedAnalytics(BaseModel):
     """
     Response for GET /api/v1/analytics/projected
-    Past months show real vs projected.
-    Future months show only projected from recurring rules.
+    total_projected and total_real cover the same elapsed span, up to today;
+    total_variance compares them. projected_future is the projection for
+    the rest of the current month and the months ahead (defect 9).
     """
     months:                  list[ProjectedDataPoint]
     total_projected:         Decimal
     total_real:              Decimal
     total_variance:          Decimal
+    projected_future:        Decimal
     avg_monthly_projected:   Decimal
 
 

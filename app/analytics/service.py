@@ -5,6 +5,7 @@ import calendar
 import logging
 
 from app.database import db, fetch_one
+from app.projection import amount_in_range, monthly_amount, split_rounded
 
 # ── Logger ────────────────────────────────────────────────────────────────
 logger = logging.getLogger(__name__)
@@ -19,6 +20,40 @@ MONTH_NAMES = [
 def month_label(year: int, month: int) -> str:
     """Formats a year+month into a readable label e.g. 'Jan 2025'."""
     return f"{MONTH_NAMES[month]} {year}"
+
+
+PROJECTED_FIELDS = "amount, frequency, currency_id, day_of_week, day_of_month, month, year"
+
+
+def _active_projected_costs(user_id: str) -> list[dict]:
+    """The user's active projected costs, each with its MXN rate as "_rate"."""
+    costs = (
+        db()
+        .table("projected_costs")
+        .select(PROJECTED_FIELDS)
+        .eq("user_id", user_id)
+        .eq("is_active", True)
+        .execute()
+    ).data or []
+    rates = {
+        c["id"]: Decimal(str(c["exchange_rate"]))
+        for c in (db().table("currencies").select("id, exchange_rate").execute().data or [])
+    }
+    for cost in costs:
+        cost["_rate"] = rates.get(cost.get("currency_id"), Decimal("1"))
+    return costs
+
+
+def _projected_for_month(costs: list[dict], year: int, month: int) -> Decimal:
+    return sum(
+        (monthly_amount(c, year, month, c["_rate"]) for c in costs), Decimal("0")
+    )
+
+
+def _projected_between(costs: list[dict], start: date, end: date) -> Decimal:
+    return sum(
+        (amount_in_range(c, start, end, c["_rate"]) for c in costs), Decimal("0")
+    )
 
 
 def get_month_range(months_back: int) -> list[tuple[int, int]]:
@@ -123,42 +158,12 @@ async def get_dashboard_summary(
         if cat_result:
             largest_category = cat_result["name"]
 
-    # ── Calculate projected monthly expenses from recurring rules ──────────
-    # Use projected_costs table instead of recurring rules
-    # Projected costs are explicit forecasts, not transaction generators
-    costs_result = (
-        db()
-        .table("projected_costs")
-        .select("amount, frequency, currency_id, month, year")
-        .eq("user_id", user_id)
-        .eq("is_active", True)
-        .execute()
+    # ── Projected spending for this month (app/projection.py) ─────────────
+    # One-time costs count in their own month, as /projected/monthly — the
+    # dashboard card — has always counted them.
+    projected_monthly = _projected_for_month(
+        _active_projected_costs(user_id), year, month
     )
-
-    currencies_result = (
-        db()
-        .table("currencies")
-        .select("id, exchange_rate")
-        .execute()
-    )
-    currency_map = {
-        c["id"]: Decimal(str(c["exchange_rate"]))
-        for c in (currencies_result.data or [])
-    }
-
-    WEEKLY_PER_MONTH  = Decimal("4.333333")
-    projected_monthly = Decimal("0")
-
-    for cost in (costs_result.data or []):
-        rate   = currency_map.get(cost.get("currency_id"), Decimal("1"))
-        amount = Decimal(str(cost["amount"])) * rate
-        freq   = cost["frequency"]
-
-        if freq == "monthly":
-            projected_monthly += amount
-        elif freq == "weekly":
-            projected_monthly += amount * WEEKLY_PER_MONTH
-        # one_time costs are not included in monthly projection average
 
     return {
         "period_label":       month_label(year, month),
@@ -371,49 +376,17 @@ async def get_monthly_analytics(
             "net_balance":    balance,
         })
 
-    # ── Calculate projected monthly from recurring rules ──────────────────
-    # Use projected_costs table instead of recurring rules
-    # Projected costs are explicit forecasts, not transaction generators
-    costs_result = (
-        db()
-        .table("projected_costs")
-        .select("amount, frequency, currency_id, month, year")
-        .eq("user_id", user_id)
-        .eq("is_active", True)
-        .execute()
-    )
-
-    currencies_result = (
-        db()
-        .table("currencies")
-        .select("id, exchange_rate")
-        .execute()
-    )
-    currency_map = {
-        c["id"]: Decimal(str(c["exchange_rate"]))
-        for c in (currencies_result.data or [])
-    }
-
-    WEEKLY_PER_MONTH  = Decimal("4.333333")
-    projected_monthly = Decimal("0")
-
-    for cost in (costs_result.data or []):
-        rate   = currency_map.get(cost.get("currency_id"), Decimal("1"))
-        amount = Decimal(str(cost["amount"])) * rate
-        freq   = cost["frequency"]
-
-        if freq == "monthly":
-            projected_monthly += amount
-        elif freq == "weekly":
-            projected_monthly += amount * WEEKLY_PER_MONTH
-        # one_time costs are not included in monthly projection average
-
-    projected_monthly = round(projected_monthly, 2)
-
-    # Add projected to each month data point
-    today = date.today()
+    # ── Projected spending, month by month (app/projection.py) ────────────
+    # Each month has its own figure: a weekly cost is more in a 31-day month
+    # than in February.
+    costs = _active_projected_costs(user_id)
     for point in data_points:
-        point["projected_monthly"] = str(projected_monthly)
+        point["projected_monthly"] = round(
+            _projected_for_month(costs, point["year"], point["month"]), 2
+        )
+
+    # The top-level figure is the latest month's, the one the dashboard shows.
+    projected_monthly = data_points[-1]["projected_monthly"] if data_points else Decimal("0")
 
     return {
         "months":             data_points,
@@ -612,25 +585,34 @@ async def get_projected_analytics(
     months_back: int = 3,
 ) -> dict:
     """
-    Compares projected spending (from recurring rules) vs real spending.
+    Compares projected spending (projected costs) with real spending.
 
-    Past months:   shows real expenses vs what recurring rules projected
-    Future months: shows only projected amounts from active recurring rules
+    Defect 9, option A of the signed analytics acta: real and projected are
+    compared only over time that has passed, and what is still to come is
+    reported apart.
 
-    Projection logic:
-      For each active recurring rule with type=expense:
-        - Calculate how many times it fires per month based on frequency
-        - weekly:  ~4.33 times per month (52 weeks / 12 months)
-        - monthly: exactly 1 time per month
-        - Sum all rule amounts → projected monthly expense
+      elapsed   the months_back months up to and including the current one.
+                The current month counts up to today: its projection is
+                prorated from the 1st to today (app/projection.py), and its
+                real spending is what is dated up to today. Both sides use
+                the same days.
+      future    the rest of the current month plus the months_ahead months.
+
+      total_projected   projection over the elapsed span
+      total_real        real spending over the same span
+      total_variance    total_real - total_projected
+      projected_future  projection for what has not happened yet
+
+    Each month reports its full projection (projected_amount), the part of
+    it that has elapsed (projected_to_date) and, for elapsed months, its
+    variance against projected_to_date.
     """
     today       = date.today()
+    current     = (today.year, today.month)
     past_range  = get_month_range(months_back)
     future_months = []
 
-    # Build future months list
-    year  = today.year
-    month = today.month
+    year, month = current
     for _ in range(months_ahead):
         month += 1
         if month > 12:
@@ -639,75 +621,21 @@ async def get_projected_analytics(
         future_months.append((year, month))
 
     all_months = past_range + future_months
+    costs      = _active_projected_costs(user_id)
 
-    # ── Fetch projected costs instead of recurring rules ──────────────────
-    # Projected costs are explicit forecasts — not transaction generators
-    costs_result = (
+    # ── Real expenses over the elapsed span, up to today ──────────────────
+    first_past = past_range[0]
+    real_expenses = (
         db()
-        .table("projected_costs")
-        .select("amount, frequency, currency_id")
+        .table("expenses")
+        .select("amount_mxn, date")
         .eq("user_id", user_id)
-        .eq("is_active", True)
+        .gte("date", date(first_past[0], first_past[1], 1).isoformat())
+        .lte("date", today.isoformat())
         .execute()
-    )
+    ).data or []
 
-    costs = costs_result.data or []
-
-    # ── Fetch all currencies once ─────────────────────────────────────────
-    currencies_result = (
-        db()
-        .table("currencies")
-        .select("id, exchange_rate")
-        .execute()
-    )
-    currency_map = {
-        c["id"]: Decimal(str(c["exchange_rate"]))
-        for c in (currencies_result.data or [])
-    }
-
-    WEEKLY_PER_MONTH  = Decimal("4.333333")
-    monthly_projected = Decimal("0")
-
-    for cost in costs:
-        rate   = currency_map.get(cost.get("currency_id"), Decimal("1"))
-        amount = Decimal(str(cost["amount"])) * rate
-        freq   = cost["frequency"]
-
-        if freq == "monthly":
-            monthly_projected += amount
-        elif freq == "weekly":
-            monthly_projected += amount * WEEKLY_PER_MONTH
-        # one_time excluded from monthly average projection
-
-    monthly_projected = round(monthly_projected, 2)
-
-    # ── Fetch real expenses for past months ───────────────────────────────
-    if past_range:
-        first_past = past_range[0]
-        last_past  = past_range[-1]
-        start_date = date(first_past[0], first_past[1], 1)
-        end_date   = date(
-            last_past[0], last_past[1],
-            calendar.monthrange(last_past[0], last_past[1])[1]
-        )
-
-        real_result = (
-            db()
-            .table("expenses")
-            .select("amount_mxn, date")
-            .eq("user_id", user_id)
-            .gte("date", start_date.isoformat())
-            .lte("date", end_date.isoformat())
-            .execute()
-        )
-
-        real_expenses = real_result.data or []
-    else:
-        real_expenses = []
-
-    # ── Aggregate real expenses by month ──────────────────────────────────
     real_by_month: dict = {(y, m): Decimal("0") for y, m in past_range}
-
     for exp in real_expenses:
         d   = date.fromisoformat(exp["date"])
         key = (d.year, d.month)
@@ -715,36 +643,54 @@ async def get_projected_analytics(
             real_by_month[key] += Decimal(str(exp["amount_mxn"]))
 
     # ── Build response data points ────────────────────────────────────────
-    data_points     = []
-    total_projected = Decimal("0")
-    total_real      = Decimal("0")
+    data_points      = []
+    total_projected  = Decimal("0")
+    total_real       = Decimal("0")
+    projected_future = Decimal("0")
+    full_total       = Decimal("0")
 
     for year, month in all_months:
-        is_future = (year, month) > (today.year, today.month)
-        real      = round(real_by_month.get((year, month), Decimal("0")), 2)
-        projected = monthly_projected
-        variance  = real - projected if not is_future else Decimal("0")
+        first = date(year, month, 1)
+        last  = date(year, month, calendar.monthrange(year, month)[1])
+        full  = _projected_for_month(costs, year, month)
 
-        total_projected += projected
+        if (year, month) < current:
+            to_date = full
+        elif (year, month) == current:
+            to_date = _projected_between(costs, first, today)
+        else:
+            to_date = Decimal("0")
+
+        is_future = (year, month) > current
+        real      = real_by_month.get((year, month), Decimal("0"))
+
+        total_projected  += to_date
+        projected_future += full - to_date
+        full_total       += full
         if not is_future:
             total_real += real
 
         data_points.append({
-            "month_label":      month_label(year, month),
-            "year":             year,
-            "month":            month,
-            "projected_amount": projected,
-            "real_amount":      real,
-            "variance":         round(variance, 2),
-            "is_future":        is_future,
+            "month_label":       month_label(year, month),
+            "year":              year,
+            "month":             month,
+            "projected_amount":  round(full, 2),
+            "projected_to_date": round(to_date, 2),
+            "real_amount":       round(real, 2),
+            "variance":          round(real - to_date, 2) if not is_future else Decimal("0"),
+            "is_future":         is_future,
         })
+
+    total_projected = round(total_projected, 2)
+    total_real      = round(total_real, 2)
 
     return {
         "months":                data_points,
-        "total_projected":       round(total_projected,   2),
-        "total_real":            round(total_real,        2),
-        "total_variance":        round(total_real - total_projected, 2),
-        "avg_monthly_projected": monthly_projected,
+        "total_projected":       total_projected,
+        "total_real":            total_real,
+        "total_variance":        total_real - total_projected,
+        "projected_future":      round(projected_future, 2),
+        "avg_monthly_projected": round(full_total / len(all_months), 2),
     }
 
 
@@ -1170,7 +1116,11 @@ async def get_dashboard_weekly(
 
     Used by the dashboard weekly chart.
     Shows 4-5 bars per week with income/expenses/projected.
-    Projected is the same monthly projection divided by 4.333.
+
+    Each week's projection is the part of every projected cost that falls on
+    its days (app/projection.py, defect 10). Weeks are clipped to the month,
+    so a week that crosses into the next month keeps only its days here. The
+    weeks add up to projected_monthly to the cent.
     """
     import calendar as cal_mod
     from datetime import timedelta
@@ -1200,55 +1150,9 @@ async def get_dashboard_weekly(
         .execute()
     ).data or []
 
-    # ── Fetch projected monthly total ─────────────────────────────────
-    costs_result = (
-        db()
-        .table("projected_costs")
-        .select("amount, frequency, currency_id")
-        .eq("user_id", user_id)
-        .eq("is_active", True)
-        .execute()
-    ).data or []
-
-    currencies_result = (
-        db()
-        .table("currencies")
-        .select("id, exchange_rate")
-        .execute()
-    ).data or []
-
-    currency_map = {
-        c["id"]: Decimal(str(c["exchange_rate"]))
-        for c in currencies_result
-    }
-
-    WEEKLY_PER_MONTH  = Decimal("4.333333")
-    projected_monthly = Decimal("0")
-
-    for cost in costs_result:
-        rate   = currency_map.get(cost.get("currency_id"), Decimal("1"))
-        amount = Decimal(str(cost["amount"])) * rate
-        if cost["frequency"] == "monthly":
-            projected_monthly += amount
-        elif cost["frequency"] == "weekly":
-            projected_monthly += amount * WEEKLY_PER_MONTH
-
-    # ── Calculate projected amount per specific week ───────────────────
-    # Instead of dividing monthly by 4.333 uniformly,
-    # calculate what actually falls in each week:
-    #   weekly costs → only count if their day_of_week falls in that week
-    #   monthly costs → only count if their day_of_month falls in that week
-    #   one_time costs → only count if their month/year matches
-
-    # Fetch full projected costs with day fields
-    costs_full_result = (
-        db()
-        .table("projected_costs")
-        .select("amount, frequency, currency_id, day_of_week, day_of_month, month, year")
-        .eq("user_id", user_id)
-        .eq("is_active", True)
-        .execute()
-    ).data or []
+    # ── Projected costs (app/projection.py) ───────────────────────────
+    costs             = _active_projected_costs(user_id)
+    projected_monthly = round(_projected_for_month(costs, year, month), 2)
 
     # ── Build week boundaries based on week_start_day ─────────────────
     # Find all week start dates within this month.
@@ -1305,53 +1209,14 @@ async def get_dashboard_weekly(
         weeks[key]["income"] += Decimal(str(inc["amount_mxn"]))
 
     # ── Build response ─────────────────────────────────────────────────
+    week_projected = split_rounded([
+        _projected_between(costs, w_start, w_end) for w_start, w_end in week_ranges
+    ])
+
     data_points = []
     for i, (w_start, w_end) in enumerate(week_ranges):
         key   = f"W{i + 1}"
         label = f"W{i + 1} ({w_start.strftime('%b %d')})"
-
-        # Days in this week (day numbers of the month)
-        week_days = set(range(w_start.day, w_end.day + 1))
-
-        # Weekday numbers in this week (0=Mon, 6=Sun Python format)
-        week_weekdays = set()
-        current = w_start
-        while current <= w_end:
-            week_weekdays.add(current.weekday())
-            current += timedelta(days=1)
-
-        # Calculate projected for this specific week
-        week_projected = Decimal("0")
-        for cost in costs_full_result:
-            rate   = currency_map.get(cost.get("currency_id"), Decimal("1"))
-            amount = Decimal(str(cost["amount"])) * rate
-            freq   = cost["frequency"]
-
-            if freq == "weekly":
-                # Include if this cost's day_of_week falls in this week
-                dow = cost.get("day_of_week")
-                if dow is not None and dow in week_weekdays:
-                    week_projected += amount
-                elif dow is None:
-                    # No specific day set → distribute evenly
-                    week_projected += amount
-
-            elif freq == "monthly":
-                # Include if this cost's day_of_month falls in this week
-                dom = cost.get("day_of_month")
-                if dom is not None and dom in week_days:
-                    week_projected += amount
-                elif dom is None:
-                    # No specific day → distribute evenly across 4.333 weeks
-                    week_projected += amount / WEEKLY_PER_MONTH
-
-            elif freq == "one_time":
-                # Include if this one-time cost is in this month/year
-                cost_month = cost.get("month")
-                cost_year  = cost.get("year")
-                if cost_month == month and cost_year == year:
-                    # Spread one-time cost across all weeks evenly
-                    week_projected += amount / Decimal(str(max_week))
 
         data_points.append({
             "week_label":       label,
@@ -1360,7 +1225,7 @@ async def get_dashboard_weekly(
             "week_end":         w_end.isoformat(),
             "total_income":     round(weeks[key]["income"],   2),
             "total_expenses":   round(weeks[key]["expenses"], 2),
-            "projected_weekly": round(week_projected,         2),
+            "projected_weekly": week_projected[i],
         })
 
     return {
