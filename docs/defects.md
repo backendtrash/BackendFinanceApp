@@ -10,7 +10,8 @@
 | 6 | API no aplica políticas por fila | Alta | 11/10/2026 | 18/10/2026 | Corregido y desplegado | 9311557 |
 | 7 | Patrimonio neto: descartaba el historial anterior a la ventana | Media | 11/10/2026 | 01/11/2026 | Corregido (acta firmada, opción A) | 364cb99 |
 | 8 | Tendencias: promediaba meses en que la categoría no existía | Media | 11/10/2026 | 01/11/2026 | Corregido (acta firmada, opción A) | 364cb99 |
-| 9–10 | Proyección: variación y vista semanal | Media | 11/10/2026 | | Abierto (xfail) | |
+| 9 | Proyectado contra real comparaba periodos distintos | Media | 11/10/2026 | 01/11/2026 | Corregido (acta firmada, opción A) | c7f4d68 · front 6b220ed |
+| 10 | La vista semanal no cuadraba con el acumulado mensual | Media | 11/10/2026 | 01/11/2026 | Corregido (acta firmada, opción A) | c7f4d68 |
 | 11 | Tasa de cambio guardaba `"now()"` como fecha | Alta | 11/10/2026 | 18/10/2026 | Corregido | 725600c |
 | 12 | Front: recargar cerraba la sesión en desarrollo | Media | 18/10/2026 | 18/10/2026 | Corregido | front 82571c6 |
 | 13 | Front: el 409 de categorías no mostraba el motivo | Baja | 18/10/2026 | 18/10/2026 | Corregido | front e6c88aa |
@@ -29,6 +30,8 @@
 | 26 | El primer respaldo solo contenía la lista de usuarios, sin los datos | Media | 25/10/2026 | 25/10/2026 | Corregido | aeba9d1 |
 | 27 | La verificación del esquema marcaba una diferencia que solo eran saltos de línea | Baja | 25/10/2026 | 25/10/2026 | Corregido | 312cc87 |
 | 28 | Front: "Exportar datos" y "Reiniciar espacio" llaman rutas que el backend no tiene | Media | 25/10/2026 | 25/10/2026 | Corregido | f94015b · front 4ccf824 |
+| 29 | Front: "Plan your month" calculaba su propio mensual con × 4.333 | Media | 01/11/2026 | 01/11/2026 | Corregido | 5894da4 · front 6b220ed |
+| 30 | Front: Recurrentes estima el gasto mensual con × 4.33 | Baja | 01/11/2026 | | Abierto | |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -488,25 +491,69 @@ is averaged from the month of its first expense ever
 is earlier. A month without spending after the first one still counts as
 zero: that is option A; option B would have skipped it.
 
+### 9. Projected vs real compared different spans
+
+**Severity:** medium · **Found:** 11/10 · **Fixed and closed:** 01/11, commits
+`c7f4d68` (API, PR #22) and `6b220ed` (frontend, front PR #7), option A of the
+signed acta
+
+`total_projected` accumulated past and future months while `total_real`
+only covered past ones, and the response reported the difference. Now both
+cover only elapsed time: the past months in full, and the current month up
+to today — its projection prorated by days, its real spending dated up to
+today. What is still to come is a separate field, `projected_future`, and
+each month reports `projected_to_date`. The Analytics screen shows
+projected and real to date, their variance, and what is projected ahead
+apart. Verified in production on 01/11.
+
+### 10. The weekly view disagreed with the monthly rollup
+
+**Severity:** medium · **Found:** 11/10 · **Fixed and closed:** 01/11, commit
+`c7f4d68` (PR #22), option A of the signed acta
+
+A weekly projected cost was `amount × 4.333` a month but its full amount in
+every week of the weekly view. A new module, `app/projection.py`, is now the
+only place the rule lives: each cost is spread over the calendar day by day
+(a weekly cost is `amount ÷ 7` a day, or `amount` on each of its weekdays; a
+monthly cost lands on its day, or is prorated by days; a one-time cost only
+in its own month). It replaced `× 4.333` in all five places: the dashboard
+summary, the monthly chart, projected vs real, the weekly view and
+`/projected/monthly`. The weeks are rounded on the running total, so they
+add up to the month to the cent.
+
+Verified in production on 01/11 with a $500 weekly cost in `prueba-a`, then
+deleted: December 2026 (31 days) is **$2,214.29** — the acta's example — in
+`/projected/monthly`, in the dashboard summary, in the weekly view's monthly
+figure and in the sum of its five weeks.
+
+### 29. Plan your month worked out its own monthly figures
+
+**Severity:** medium · **Repo:** frontend, with an API change
+**Found and fixed:** 01/11, commits `5894da4` (API, PR #22) and `6b220ed`
+(frontend, front PR #7)
+
+While moving every projection to one rule for defect 10, a sixth copy of
+`× 4.333` turned up, in the frontend: *Plan your month* computed each
+cost's monthly amount and its total itself. Once the API changed rule, it
+would have disagreed with the dashboard card. `/projected/monthly` now also
+returns `cost_breakdown`, each cost's share of the month, and the page shows
+that and the API's total instead of computing them.
+
 ---
 
 ## Open
 
-### 7–10. Analytics calculations
+### 30. Recurring rules estimate the monthly expense at × 4.33
 
-**Decision:** option A on all four, in the signed acta
-`docs/decisiones/acta-analitica.pdf` (decided 23/10, in the repository
-01/11). 7 and 8 are fixed and listed under *Fixed*; 9 and 10 follow.
+**Severity:** low · **Repo:** frontend · **Found:** 01/11, on the Recurring
+screen of `prueba-a` · **Status:** open, before H4
 
-**9. Projected variance compares different spans.** `total_projected`
-accumulates past and future months, `total_real` only past ones, and the
-response reports the difference.
-
-**10. The weekly view disagrees with the monthly rollup.** A weekly
-projected cost with no `day_of_week` is added in full to every week bucket,
-so a 500/week cost shows 2500 in a five-week month against 2166.67 monthly.
-
-
+*Recurring rules* sums its rules into a monthly figure with
+`amount × 4.33` (`RecurringPage.tsx`). A $500 rule every Monday shows
+$2,165.00, but November 2026 has five Mondays and the rule will generate
+$2,500. The transactions the rules generate are right; only the estimate on
+the summary cards is off, so RF07 still produces the correct result. Same
+fix as defect 29: take the figure from the API rather than compute it.
 
 ---
 
@@ -524,3 +571,11 @@ so a 500/week cost shows 2500 in a five-week month against 2166.67 monthly.
   almost all `no-explicit-any`. All of them predate this week: the count is
   identical on the import commit. Not a defect in behaviour, but it means
   the linter cannot gate a pull request until they are cleared.
+- The API's "today" is UTC (`date.today()` on Railway). From 17:00 in
+  Juárez (18:00 in summer time) it is already the next day for the server,
+  so the current month's prorated projection (defect 9) counts one day
+  ahead in the evening. Seen on 01/11 at 22:23, when the server prorated
+  two days of November.
+- In `/analytics/projected`, each month's figures are rounded on their own,
+  so the months shown can add up to a cent or two more or less than
+  `total_projected + projected_future`, which are rounded once.
