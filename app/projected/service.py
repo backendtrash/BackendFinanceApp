@@ -4,10 +4,9 @@ from uuid     import UUID
 import logging
 
 from app.database import db, fetch_one
+from app.projection import monthly_amount
 
 logger = logging.getLogger(__name__)
-
-WEEKLY_PER_MONTH = Decimal("4.333333")
 
 
 async def _get_exchange_rate(currency_id: Optional[str]) -> Decimal:
@@ -170,12 +169,13 @@ async def get_monthly_projection(
     """
     Calculates total projected spending for a given month.
 
-    Includes:
-      - All active monthly projected costs
-      - All active weekly projected costs (× 4.333)
-      - One-time costs scheduled for this specific month/year
+    Each active cost contributes what falls in this calendar month, by the
+    rule in app/projection.py: a weekly cost by the days (or weekdays) the
+    month has, a monthly cost once, a one-time cost only in its own month.
 
-    Returns breakdown by category for analytics.
+    Returns the total, and the same figures by category and by cost, so a
+    screen that lists the costs never has to work out its own monthly
+    amount (defect 29).
     """
     result = (
         db()
@@ -190,36 +190,21 @@ async def get_monthly_projection(
 
     total            = Decimal("0")
     category_totals: dict = {}
+    cost_totals:     dict = {}
 
     for cost in costs:
-        amount = Decimal(str(cost["amount"]))
-
         # Get exchange rate from joined currency data
         currency_data = cost.get("currencies")
         rate = (
             Decimal(str(currency_data["exchange_rate"]))
             if currency_data else Decimal("1")
         )
-        amount_mxn = amount * rate
-
-        freq = cost["frequency"]
-
-        if freq == "monthly":
-            contribution = amount_mxn
-        elif freq == "weekly":
-            contribution = amount_mxn * WEEKLY_PER_MONTH
-        elif freq == "one_time":
-            # Only include if this cost is for this specific month/year
-            cost_month = cost.get("month")
-            cost_year  = cost.get("year")
-            if cost_month == month and cost_year == year:
-                contribution = amount_mxn
-            else:
-                continue
-        else:
+        contribution = monthly_amount(cost, year, month, rate)
+        if contribution == 0:
             continue
 
         total += contribution
+        cost_totals[cost["id"]] = contribution
 
         # Group by category for breakdown
         cat_id = cost.get("category_id") or "uncategorized"
@@ -232,6 +217,10 @@ async def get_monthly_projection(
         "category_breakdown":  {
             k: str(round(v, 2))
             for k, v in category_totals.items()
+        },
+        "cost_breakdown":      {
+            k: str(round(v, 2))
+            for k, v in cost_totals.items()
         },
         "year":  year,
         "month": month,

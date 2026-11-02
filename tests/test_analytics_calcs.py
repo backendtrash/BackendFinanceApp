@@ -6,11 +6,11 @@ notices". The dashboard is the most-read surface in the product and the
 least verifiable by eye: every figure is a Decimal sum over rows the user
 cannot see, so a wrong total looks exactly like a right one.
 
-Two tests at the end are marked xfail. They are not scaffolding. Each
-encodes the value the function should return, fails against what it returns
-today, and names the defect. strict=True means they flip to failures the
-moment a fix lands, so none can be quietly forgotten.
+Defects 7 to 10 were pinned here as strict xfails until the coach decided
+the correct values (docs/decisiones/acta-analitica.pdf, option A on all
+four). They are now ordinary tests of the decided values.
 """
+import calendar
 from datetime import date
 from decimal import Decimal
 
@@ -151,10 +151,12 @@ async def test_dashboard_savings_rate_goes_negative_when_overspending(monkeypatc
     assert result["savings_rate"] == Decimal("-200.00")
 
 
-async def test_dashboard_converts_weekly_projections_at_4_333333(monkeypatch):
+async def test_dashboard_projects_each_cost_by_the_days_of_its_month(monkeypatch):
     """
-    A weekly cost is annualised as 52/12 weeks per month. The same constant
-    appears in four separate functions, so pin it once here.
+    Option A of the signed acta (defect 10): a weekly cost is amount / 7 for
+    every day of the month, not amount x 4.333. June has 30 days. One-time
+    costs count in their own month, as /projected/monthly — the dashboard
+    card — has always counted them.
     """
     _use(monkeypatch, FakeSupabase(
         expenses=[], earnings=[],
@@ -171,8 +173,8 @@ async def test_dashboard_converts_weekly_projections_at_4_333333(monkeypatch):
     ))
 
     result = await service.get_dashboard_summary(USER, 2026, 6)
-    # 100 monthly + 100 * 4.333333 weekly; the one_time cost is excluded
-    assert result["projected_monthly"] == Decimal("533.33")
+    # 100 monthly + 100 / 7 * 30 weekly (428.57) + 500 one-time in June
+    assert result["projected_monthly"] == Decimal("1028.57")
 
 
 async def test_dashboard_ignores_inactive_projected_costs(monkeypatch):
@@ -398,26 +400,18 @@ async def test_spending_trend_treats_uncategorized_expenses_as_one_category(monk
     assert other["category_name"] == "Uncategorized"
 
 
-# ── Known defects ─────────────────────────────────────────────────────────
-# Each of the two below asserts the correct answer and fails today.
+# ── Projections: defects 9 and 10 (option A, signed acta) ─────────────────
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="total_variance subtracts real spending over past months from "
-           "projected spending over past AND future months "
-           "(analytics/service.py:730-732, 748)",
-)
-async def test_projected_total_variance_should_compare_like_with_like(monkeypatch):
+async def test_projected_total_variance_compares_like_with_like(monkeypatch):
     """
-    With 100/month projected and nothing actually spent, the variance over
-    the three past months is -300.
+    Defect 9, option A. With 100/month projected and nothing spent, the
+    variance covers only time that has passed: the two earlier months in
+    full and the current month up to today, prorated by days. The rest of
+    the current month and the three ahead are projected_future.
 
-    It reports -600, because total_projected accumulates across all six
-    months in the response while total_real only accumulates across the
-    three that have happened. The two totals cover different spans, so the
-    difference between them does not describe anything.
+    It used to report -600: total_projected ran over all six months while
+    total_real only covered the ones that had happened.
     """
     _use(monkeypatch, FakeSupabase(
         projected_costs=[
@@ -430,30 +424,27 @@ async def test_projected_total_variance_should_compare_like_with_like(monkeypatc
 
     result = await service.get_projected_analytics(USER, months_ahead=3, months_back=3)
 
+    today = date.today()
+    days_in_month = calendar.monthrange(today.year, today.month)[1]
+    elapsed = round(Decimal("200") + Decimal("100") * today.day / days_in_month, 2)
+
     assert result["total_real"] == Decimal("0")
-    assert result["total_variance"] == Decimal("-300")
+    assert result["total_projected"] == elapsed
+    assert result["total_variance"] == -elapsed
+    # Everything projected is either elapsed or still to come.
+    assert result["total_projected"] + result["projected_future"] == Decimal("600")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="a weekly projected cost with no day_of_week is added in full to "
-           "every week of the month, so the weekly view and the monthly "
-           "rollup of the same cost disagree (analytics/service.py:1289-1293)",
-)
-async def test_weekly_projection_should_match_the_monthly_rollup(monkeypatch):
+async def test_weekly_projection_matches_the_monthly_rollup(monkeypatch):
     """
-    One 500/week cost is 500 * 4.333333 = 2166.67 a month, and that is what
-    the response's own projected_monthly says.
+    Defect 10, option A, with the acta's own example: 500 a week in a 31-day
+    month is 500 / 7 * 31 = 2214.29, in the monthly figure and in the weeks.
 
-    The weekly breakdown of the same month adds the full 500 to each week
-    bucket. May 2026 has five buckets, so they total 2500. The same response
-    disagrees with itself depending on which number the user reads.
+    It used to be 500 * 4.333 = 2166.67 a month while every week of the
+    weekly view carried the full 500: 2500 over May's five buckets.
 
-    This test used to read a key named "projected", which does not exist —
-    the field is projected_weekly — so it raised KeyError and the xfail
-    swallowed it. It never checked the defect. raises=AssertionError on the
-    marker now means an xfail only counts when the assertion itself fails.
+    (This test once read a key named "projected", which does not exist, so
+    it raised KeyError and the xfail swallowed it: defect 17.)
     """
     _use(monkeypatch, FakeSupabase(
         expenses=[], earnings=[],
@@ -470,5 +461,52 @@ async def test_weekly_projection_should_match_the_monthly_rollup(monkeypatch):
     weekly_total = sum(Decimal(str(w["projected_weekly"])) for w in result["weeks"])
     monthly = round(Decimal(str(result["projected_monthly"])), 2)
 
-    assert monthly == Decimal("2166.67"), "precondition: the monthly figure"
+    assert monthly == Decimal("2214.29")
     assert weekly_total == monthly
+    # May 2026 starts on a Friday: Fri-Sun, then four full weeks.
+    assert [Decimal(str(w["projected_weekly"])) for w in result["weeks"]] == [
+        Decimal("214.29"), Decimal("500.00"), Decimal("500.00"),
+        Decimal("500.00"), Decimal("500.00"),
+    ]
+
+
+async def test_the_dashboard_card_and_the_weekly_view_agree(monkeypatch):
+    """
+    The card reads /projected/monthly; the weekly chart reads
+    dashboard-weekly. Same costs, same month, same figure, with costs of
+    every kind, including a monthly one on day 31 of a 30-day month.
+    """
+    from app.projected import service as projected_service
+
+    costs = [
+        {"amount": "500", "frequency": "weekly"},
+        {"amount": "80", "frequency": "weekly", "day_of_week": 4},
+        {"amount": "1200", "frequency": "monthly", "day_of_month": 31},
+        {"amount": "300", "frequency": "monthly"},
+        {"amount": "999", "frequency": "one_time", "month": 6, "year": 2026},
+        {"amount": "999", "frequency": "one_time", "month": 7, "year": 2026, "day_of_month": 3},
+    ]
+    base = {"currency_id": CURRENCY_MXN, "user_id": USER, "is_active": True,
+            "currencies": {"exchange_rate": "1"}, "month": None, "year": None,
+            "day_of_month": None, "day_of_week": None}
+    _use(monkeypatch, FakeSupabase(
+        expenses=[], earnings=[],
+        projected_costs=[{**base, **c, "id": f"cost-{i}"} for i, c in enumerate(costs)],
+        currencies=[{"id": CURRENCY_MXN, "exchange_rate": "1"}],
+        categories=[], user_preferences=[],
+    ))
+
+    projection = await projected_service.get_monthly_projection(USER, 2026, 6)
+    card = Decimal(projection["total_projected_mxn"])
+    weekly = await service.get_dashboard_weekly(USER, 2026, 6, week_start_day=0)
+    summary = await service.get_dashboard_summary(USER, 2026, 6)
+
+    assert sum(Decimal(str(w["projected_weekly"])) for w in weekly["weeks"]) == card
+    assert Decimal(str(weekly["projected_monthly"])) == card
+    assert summary["projected_monthly"] == card
+    # Per cost too, for the screen that lists them (defect 29). The one-time
+    # cost for July is not in June's.
+    by_cost = {k: Decimal(v) for k, v in projection["cost_breakdown"].items()}
+    assert sum(by_cost.values()) == card
+    assert by_cost["cost-0"] == Decimal("2142.86")    # 500 / 7 * 30
+    assert "cost-5" not in by_cost
