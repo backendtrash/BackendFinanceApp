@@ -490,7 +490,8 @@ async def test_the_dashboard_card_and_the_weekly_view_agree(monkeypatch):
             "currencies": {"exchange_rate": "1"}, "month": None, "year": None,
             "day_of_month": None, "day_of_week": None}
     _use(monkeypatch, FakeSupabase(
-        expenses=[], earnings=[], projected_costs=[{**base, **c} for c in costs],
+        expenses=[], earnings=[],
+        projected_costs=[{**base, **c, "id": f"cost-{i}"} for i, c in enumerate(costs)],
         currencies=[{"id": CURRENCY_MXN, "exchange_rate": "1"}],
         categories=[], user_preferences=[],
     ))
@@ -503,3 +504,9 @@ async def test_the_dashboard_card_and_the_weekly_view_agree(monkeypatch):
     assert sum(Decimal(str(w["projected_weekly"])) for w in weekly["weeks"]) == card
     assert Decimal(str(weekly["projected_monthly"])) == card
     assert summary["projected_monthly"] == card
+    # Per cost too, for the screen that lists them (defect 29). The one-time
+    # cost for July is not in June's.
+    by_cost = {k: Decimal(v) for k, v in projection["cost_breakdown"].items()}
+    assert sum(by_cost.values()) == card
+    assert by_cost["cost-0"] == Decimal("2142.86")    # 500 / 7 * 30
+    assert "cost-5" not in by_cost

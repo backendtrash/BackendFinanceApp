@@ -173,7 +173,9 @@ async def get_monthly_projection(
     rule in app/projection.py: a weekly cost by the days (or weekdays) the
     month has, a monthly cost once, a one-time cost only in its own month.
 
-    Returns breakdown by category for analytics.
+    Returns the total, and the same figures by category and by cost, so a
+    screen that lists the costs never has to work out its own monthly
+    amount (defect 29).
     """
     result = (
         db()
@@ -188,6 +190,7 @@ async def get_monthly_projection(
 
     total            = Decimal("0")
     category_totals: dict = {}
+    cost_totals:     dict = {}
 
     for cost in costs:
         # Get exchange rate from joined currency data
@@ -201,6 +204,7 @@ async def get_monthly_projection(
             continue
 
         total += contribution
+        cost_totals[cost["id"]] = contribution
 
         # Group by category for breakdown
         cat_id = cost.get("category_id") or "uncategorized"
@@ -213,6 +217,10 @@ async def get_monthly_projection(
         "category_breakdown":  {
             k: str(round(v, 2))
             for k, v in category_totals.items()
+        },
+        "cost_breakdown":      {
+            k: str(round(v, 2))
+            for k, v in cost_totals.items()
         },
         "year":  year,
         "month": month,
