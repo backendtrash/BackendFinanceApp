@@ -7,6 +7,6 @@
 El PDF son las páginas del acta; su última página es la foto de la página
 firmada, recibida el 27/10/2026 y guardada sin sus metadatos de cámara.
 
-Las cifras de la tabla 2 del acta (IAC 0.98 y 58.3% al 18/10) no coinciden
-con la fila del 18/10 de `docs/kpis.md` (1.03 y 66.7%). La de `kpis.md` es
-la medición vigente; la del acta se preparó con una medición anterior.
+Las cifras de la tabla 2 del acta (IAC 0.98 y 58.3% al 18/10) son las
+vigentes, las mismas de la Actividad 3. `docs/kpis.md` decía 1.03 y 66.7%; su
+fila del 18/10 se corrigió el 02/11.

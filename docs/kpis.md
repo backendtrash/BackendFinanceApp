@@ -7,29 +7,37 @@ suite completa ese día, con los números que salen de esa corrida.
 |---|---|---|---|---|---|---|---|---|
 | ~~11/10/2026~~ (original, reemplazada) | 75 | 84.8 | 75 | 1.13 | 7 de 12 | 58.3% | 1 | 100% |
 | 11/10/2026 corregido | 75 | — | 75 | 0.80 | 0 de 12 | 0% | 2 | 100% |
-| 18/10/2026 | 90 | 92.8 | 90 | 1.03 | 8 de 12 | 66.7% | 0 | 100% |
-| 25/10/2026 | 105 | 109.2 | 105 | 1.04 | 9 de 12 | 75% | 0 | 100% |
-| 01/11/2026 | 120 | 116 | 120 | 0.97 | 11 de 12 | 91.7% | 0 | 100% |
+| ~~18/10/2026~~ (reemplazada) | 90 | 92.8 | 90 | 1.03 | 8 de 12 | 66.7% | 0 | 100% |
+| 18/10/2026 corregido | 90 | 88.4 | 90 | 0.98 | 7 de 12 | 58.3% | 0 | 100% |
+| 25/10/2026 | 105 | 108.8 | 105 | 1.04 | 9 de 12 | 75% | 0 | 100% |
+| ~~01/11/2026~~ (reemplazada el 02/11) | 120 | 116 | 120 | 0.97 | 11 de 12 | 91.7% | 0 | 100% |
+| 01/11/2026 corregido (02/11) | 120 | 112.4 | 120 | 0.94 | 10 de 12 | 83.3% | 0 | 100% |
 
 ### Contra las metas
 
-| KPI | 11/10 corregido | 18/10 | 25/10 | 01/11 | Meta |
+| KPI | 11/10 corregido | 18/10 corregido | 25/10 | 01/11 corregido | Meta |
 |---|---|---|---|---|---|
-| P1. IAC | 0.80 | 1.03 (92.8 ÷ 90) | 1.04 | 0.97 (116 ÷ 120) | ≥ 0.95 ✅ |
-| P2. CRV | 0% | 66.7% (8 de 12) | 75% (9 de 12) | 91.7% (11 de 12) | 50% en H3 ✅ |
+| P1. IAC | 0.80 (60 ÷ 75) | 0.98 (88.4 ÷ 90) | 1.04 (108.8 ÷ 105) | 0.94 (112.4 ÷ 120) | ≥ 0.95 ⚠️ |
+| P2. CRV | 0% | 58.3% (7 de 12) | 75% (9 de 12) | 83.3% (10 de 12) | 50% en H3 ✅; 100% en H4 |
 | Q1. DSA | 2 | 0 | 0 | 0 | 0 ✅ |
 | Q2. ACP | 100% | 100% | 100% | 100% (H1, H2, H3) | 100% ✅ |
 
-- **25/10:** valores del seguimiento de ese corte (IAC 1.04, 9 de 12); el
-  VG de 109.2 h sale de 1.04 × 105.
-- **01/11:** con los defectos 7 a 10 cerrados por el acta firmada, RF09 y
-  RF10 cuentan como verificados y el paquete 3.2 queda completo: VG 116 h
-  contra 120 planeadas. Solo falta RF12, que se verifica en el frontend
-  antes de H4. La revisión de RF09 y RF10 contra su texto completo en E1
-  (AP-5) está pendiente.
+- **VG** es la suma de las horas planeadas del trabajo verificado (Actividad
+  3). El paquete 3.2, de 18 h, agrupa RF06 a RF10, así que cada RF verificado
+  de ese paquete gana 3.6 h.
+- **01/11 corregido (02/11).** La revisión de RF09 y RF10 contra su texto en
+  E1 (AP-5, `docs/verificacion-RF09-RF10.md`) se hizo el 02/11. RF09 cuenta
+  como verificado; RF10 no, por el defecto 31 y por cinco funciones sin
+  prueba de cálculo. VG = 108.8 + 3.6 (RF09) = 112.4 h; IAC 0.94, debajo de
+  la meta por un corte. El disparador de la Actividad 1 es dos cortes
+  seguidos por debajo de 0.90, así que no se activa.
 - **ACP:** H3 se aprobó a la primera el 23/10 (`docs/hitos/acta-H3.pdf`).
-- **El acta de H3 trae otras cifras para el 18/10** (IAC 0.98 y 58.3%). La
-  medición vigente es la de esta tabla; el acta se preparó con una anterior.
+
+### Por qué se corrigió la fila del 18/10
+
+Esta tabla decía IAC 1.03 (92.8 ÷ 90) y 8 de 12. La Actividad 3 y el acta de
+H3 reportan 0.98 (88.4 ÷ 90) y 7 de 12 (58.3%), que es la medición vigente; la
+fila se corrigió el 02/11 para que coincida con los documentos entregados.
 
 ### Por qué se corrigió la fila del 11/10
 
@@ -82,5 +90,10 @@ test_isolation.py en el CI de main   ->  verde (25 casos, contra producción)
 - **Producción, 01/11:** defecto 10 con un costo de prueba de $500 por
   semana: $2,214.29 en las cuatro vistas de diciembre. Defectos 7 y 8:
   patrimonio y tendencias cuadran con las filas de `prueba-a`.
-- **Defectos** (de `docs/defects.md`): 30 registrados; 29 corregidos,
-  1 abierto (30, severidad baja).
+- **Defectos** al 01/11 (de `docs/defects.md`): 30 registrados; 29
+  corregidos, 1 abierto (30, severidad baja).
+- **Corrección del 02/11.** "Patrimonio y tendencias cuadran" era cierto
+  solo en parte: la comprobación recalculaba sobre las filas de `prueba-a`,
+  y una de ellas era el arrastre de saldo, que no es un gasto. Con eso,
+  patrimonio y tendencias cuentan dos veces el mismo dinero (defecto 31).
+  Al 02/11: 31 registrados, 29 corregidos, 2 abiertos (30 y 31).
