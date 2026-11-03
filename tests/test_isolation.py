@@ -302,6 +302,35 @@ def test_user_b_analytics_excludes_user_a_amounts(client_b, owned_rows):
     )
 
 
+ANALYTICS_ROUTES = [
+    "/api/v1/analytics/monthly?months_back=3",
+    "/api/v1/analytics/weekly?weeks_back=4",
+    "/api/v1/analytics/categories",
+    "/api/v1/analytics/projected",
+    "/api/v1/analytics/budget-progress",
+    "/api/v1/analytics/net-worth?months_back=3",
+    "/api/v1/analytics/trends?months_back=3",
+    "/api/v1/analytics/year-over-year?year={y}&month={m}",
+    "/api/v1/analytics/dashboard-weekly?year={y}&month={m}",
+    "/api/v1/analytics/carry-forward?year={y}&month={m}",
+]
+
+
+@pytest.mark.parametrize("route", ANALYTICS_ROUTES)
+def test_user_b_analytics_never_carry_user_a_amounts(client_b, owned_rows, route):
+    """
+    Every RF10 figure is an aggregate with no row ids, so a leak would only
+    show as user A's amounts inside user B's numbers. A wrote an expense of
+    123.45 and an earning of 678.90 today; neither may appear anywhere in
+    B's analytics.
+    """
+    today = date.today()
+    response = client_b.get(route.format(y=today.year, m=today.month))
+    assert response.status_code == 200, f"{route}: {response.status_code} {response.text[:120]}"
+    for amount in ("123.45", "678.9"):
+        assert amount not in response.text, f"user A's {amount} surfaced in user B's {route}"
+
+
 def test_the_export_holds_only_the_callers_rows(client_a, client_b, owned_rows):
     """
     The export reads every table at once, so one missed filter would hand

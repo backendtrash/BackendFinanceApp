@@ -178,46 +178,39 @@ async def get_dashboard_summary(
     }
 
 
-async def _get_carry_forward_notes(prev_year: int, prev_month: int) -> str:
-    return f"Carry-forward · {month_label(prev_year, prev_month)}"
-
-
-async def _check_carry_forward_applied(user_id: str, year: int, month: int, notes_key: str) -> bool:
-    first_day = date(year, month, 1)
-    last_day  = date(year, month, calendar.monthrange(year, month)[1])
-
-    earn_check = (
-        db().table("earnings")
-        .select("id")
-        .eq("user_id", user_id)
-        .eq("notes", notes_key)
-        .gte("date", first_day.isoformat())
-        .lte("date", last_day.isoformat())
+def _opening_balance(user_id: str, before: date) -> Decimal:
+    """
+    Everything earned minus everything spent before a date, in MXN, summed in
+    the database (net_balance_before, migration 013).
+    """
+    rows = (
+        db()
+        .rpc("net_balance_before", {
+            "p_user_id": user_id,
+            "p_before":  before.isoformat(),
+        })
         .execute()
-    )
-    exp_check = (
-        db().table("expenses")
-        .select("id")
-        .eq("user_id", user_id)
-        .eq("notes", notes_key)
-        .gte("date", first_day.isoformat())
-        .lte("date", last_day.isoformat())
-        .execute()
-    )
-    return bool(earn_check.data) or bool(exp_check.data)
+    ).data or []
+    return Decimal(str(rows[0]["balance"])) if rows else Decimal("0")
 
 
 async def get_carry_forward_status(user_id: str, year: int, month: int) -> dict:
-    """Returns carry-forward status for a month without creating any entry."""
+    """
+    The balance a month starts with: everything earned minus everything spent
+    before its 1st, which is the balance carried over from the month before.
+
+    Defect 31, option A: the carry-forward is shown as this opening balance
+    and is never written as a movement. It used to be stored as a real
+    expense or earning on the 1st, which net worth, totals, trends and
+    projected vs real then counted a second time. Computing it on demand is
+    idempotent by construction: there is nothing to apply twice.
+    """
     if month == 1:
         prev_year, prev_month = year - 1, 12
     else:
         prev_year, prev_month = year, month - 1
 
-    prev_summary = await get_dashboard_summary(user_id, prev_year, prev_month)
-    balance      = prev_summary["net_balance"]
-    notes_key    = await _get_carry_forward_notes(prev_year, prev_month)
-    applied      = await _check_carry_forward_applied(user_id, year, month, notes_key)
+    balance = round(_opening_balance(user_id, date(year, month, 1)), 2)
 
     if balance > 0:
         entry_type = "income"
@@ -230,62 +223,20 @@ async def get_carry_forward_status(user_id: str, year: int, month: int) -> dict:
         "source_period": month_label(prev_year, prev_month),
         "balance":       balance,
         "entry_type":    entry_type,
-        "applied":       applied if balance != 0 else True,
+        # Nothing is ever pending. Kept, always True, so a client that still
+        # asks before applying never applies.
+        "applied":       True,
     }
 
 
 async def apply_carry_forward(user_id: str, year: int, month: int) -> dict:
     """
-    Idempotent: creates a carry-forward income/expense entry for the target
-    month if the previous month had a non-zero net balance and the entry
-    does not already exist.
+    Writes nothing and returns the same as get_carry_forward_status.
+
+    The route stays so a frontend from before defect 31 keeps working while
+    it is replaced; it no longer creates a movement.
     """
-    status = await get_carry_forward_status(user_id, year, month)
-    balance   = status["balance"]
-    notes_key = await _get_carry_forward_notes(
-        year - 1 if month == 1 else year,
-        12       if month == 1 else month - 1,
-    )
-
-    if status["applied"] or balance == 0:
-        return status
-
-    # Fetch MXN currency id
-    mxn_result = (
-        db().table("currencies")
-        .select("id")
-        .eq("code", "MXN")
-        .execute()
-    )
-    if not mxn_result.data:
-        return {**status, "applied": False}
-
-    mxn_id    = mxn_result.data[0]["id"]
-    first_day = date(year, month, 1).isoformat()
-
-    if balance > 0:
-        db().table("earnings").insert({
-            "user_id":      user_id,
-            "amount":       str(balance),
-            "currency_id":  mxn_id,
-            "amount_mxn":   str(balance),
-            "date":         first_day,
-            "notes":        notes_key,
-            "is_recurring": False,
-        }).execute()
-    else:
-        abs_balance = abs(balance)
-        db().table("expenses").insert({
-            "user_id":      user_id,
-            "amount":       str(abs_balance),
-            "currency_id":  mxn_id,
-            "amount_mxn":   str(abs_balance),
-            "date":         first_day,
-            "notes":        notes_key,
-            "is_recurring": False,
-        }).execute()
-
-    return {**status, "applied": True}
+    return await get_carry_forward_status(user_id, year, month)
 
 
 async def get_monthly_analytics(
@@ -820,17 +771,7 @@ async def get_net_worth_history(
         calendar.monthrange(last_month[0], last_month[1])[1]
     )
 
-    opening = (
-        db()
-        .rpc("net_balance_before", {
-            "p_user_id": user_id,
-            "p_before":  start_date.isoformat(),
-        })
-        .execute()
-    ).data or []
-    opening_balance = (
-        Decimal(str(opening[0]["balance"])) if opening else Decimal("0")
-    )
+    opening_balance = _opening_balance(user_id, start_date)
 
     all_earnings = (
         db()

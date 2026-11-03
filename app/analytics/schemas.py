@@ -156,11 +156,12 @@ class BudgetProgressAnalytics(BaseModel):
 
 class CarryForwardStatus(BaseModel):
     """
-    State of the carry-forward for a given month.
-    balance     — previous month's net balance (MXN, signed)
-    applied     — True if a carry-forward entry already exists for this month
-    entry_type  — 'income' | 'expense' | 'none'
-    source_period — human label of the source month e.g. 'May 2025'
+    The balance a month starts with (defect 31, option A).
+    balance     — everything earned minus everything spent before the
+                  month's 1st (MXN, signed): the balance carried over
+    applied     — always True; nothing is written, so nothing is pending
+    entry_type  — 'income' | 'expense' | 'none', the sign of balance
+    source_period — human label of the month it carries over from
     """
     source_period: str
     balance:       Decimal

@@ -265,7 +265,7 @@ async def spending_trends(
     "/carry-forward",
     response_model=CarryForwardStatus,
     status_code=status.HTTP_200_OK,
-    summary="Get carry-forward status for a month (read-only)",
+    summary="Get the balance a month starts with, carried over from the month before",
 )
 async def get_carry_forward(
     year:  int,
@@ -285,7 +285,7 @@ async def get_carry_forward(
     "/carry-forward",
     response_model=CarryForwardStatus,
     status_code=status.HTTP_200_OK,
-    summary="Apply carry-forward balance from previous month (idempotent)",
+    summary="Deprecated: writes nothing, returns the same as GET (defect 31)",
 )
 async def post_carry_forward(
     body: CarryForwardApply,
