@@ -32,6 +32,7 @@
 | 28 | Front: "Exportar datos" y "Reiniciar espacio" llaman rutas que el backend no tiene | Media | 25/10/2026 | 25/10/2026 | Corregido | f94015b · front 4ccf824 |
 | 29 | Front: "Plan your month" calculaba su propio mensual con × 4.333 | Media | 01/11/2026 | 01/11/2026 | Corregido | 5894da4 · front 6b220ed |
 | 30 | Front: Recurrentes estima el gasto mensual con × 4.33 | Baja | 01/11/2026 | | Abierto | |
+| 31 | El arrastre de saldo se guarda como movimiento real y se cuenta dos veces | Media | 02/11/2026 | | Abierto | |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -554,6 +555,32 @@ $2,165.00, but November 2026 has five Mondays and the rule will generate
 $2,500. The transactions the rules generate are right; only the estimate on
 the summary cards is off, so RF07 still produces the correct result. Same
 fix as defect 29: take the figure from the API rather than compute it.
+
+### 31. The carry-forward is stored as a real movement and counted twice
+
+**Severity:** medium · **Found:** 02/11, in the review of RF10 against E1
+(AP-5, `docs/verificacion-RF09-RF10.md`) · **Status:** open, before H4
+
+RF10 asks for the month's balance to be carried into the next one. The
+Dashboard does it on its own when it loads: `POST /analytics/carry-forward`
+writes the previous month's net balance as a real expense (or earning),
+dated the 1st, with a note such as "Carry-forward · Oct 2026". Every
+aggregate then counts that money again:
+
+- **Net worth** adds it a second time. In `prueba-a` the only real expense
+  is $145, on 19/10; the carry-forward wrote another $145 on 01/11 (at
+  22:22, when the Dashboard was opened), and net worth reads −$290. Each
+  new month adds the balance again, so it keeps falling with no spending.
+- The **totals over several months**, the **category donut and trend** and
+  the **real side of projected vs real** include it as spending.
+
+Two more problems in the same function: its idempotency rests on finding a
+row with that exact note, so editing the note lets it write again; and it
+checks and then inserts, so two Dashboards opened at once can both write
+it. Neither has a test. Nothing leaks and nothing is lost, but RF10 cannot
+count as verified while this alters its result. How to carry the balance
+without counting it twice (an opening balance for the month, or a marked
+movement left out of the analytics) is a product decision.
 
 ---
 
