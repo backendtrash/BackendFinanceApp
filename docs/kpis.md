@@ -31,6 +31,9 @@ suite completa ese día, con los números que salen de esa corrida.
   prueba de cálculo. VG = 108.8 + 3.6 (RF09) = 112.4 h; IAC 0.94, debajo de
   la meta por un corte. El disparador de la Actividad 1 es dos cortes
   seguidos por debajo de 0.90, así que no se activa.
+- **Seguimiento del 02/11.** El defecto 31 se corrigió y RF10 quedó
+  verificado ese día (`docs/verificacion-RF09-RF10.md`). Suma 3.6 h al VG del
+  siguiente corte (08/11): 116 h con lo verificado al 02/11.
 - **ACP:** H3 se aprobó a la primera el 23/10 (`docs/hitos/acta-H3.pdf`).
 
 ### Por qué se corrigió la fila del 18/10
@@ -96,4 +99,5 @@ test_isolation.py en el CI de main   ->  verde (25 casos, contra producción)
   solo en parte: la comprobación recalculaba sobre las filas de `prueba-a`,
   y una de ellas era el arrastre de saldo, que no es un gasto. Con eso,
   patrimonio y tendencias cuentan dos veces el mismo dinero (defecto 31).
-  Al 02/11: 31 registrados, 29 corregidos, 2 abiertos (30 y 31).
+  Al cierre del 02/11: 31 registrados, 30 corregidos, 1 abierto (30); el 31
+  se corrigió el mismo día.
