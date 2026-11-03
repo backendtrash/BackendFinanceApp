@@ -28,7 +28,7 @@ alteren su resultado.
 
 Sin defectos abiertos que alteren su resultado.
 
-## RF10. Analítica y reportes — **no verificado**
+## RF10. Analítica y reportes — **verificado el 02/11** (no verificado al corte del 01/11)
 
 > Debe presentar tarjetas de resumen del mes en curso, la comparación mensual
 > de ingresos contra gastos, el flujo de efectivo semanal, la distribución del
@@ -81,3 +81,22 @@ los otros nueve endpoints de RF10 no tienen caso de aislamiento.
 RF10 contaba como verificado en la fila del 01/11 de `kpis.md`. Con esta
 revisión deja de contar: la fila **01/11 corregido (02/11)** queda en 10 de
 12 RF (83.3%), VG 112.4 h e IAC 0.94.
+
+## Seguimiento del 02/11: RF10 verificado
+
+Lo que faltaba quedó en `main` el 02/11 (PR #25 y front PR #8):
+
+| Hallazgo | Qué se hizo | Evidencia |
+|---|---|---|
+| Defecto 31 | El arrastre es el saldo inicial del mes, calculado y nunca guardado; la migración 014 quitó los arrastres guardados | `test_carry_forward.py` (5); producción: patrimonio −$145, era −$290 |
+| Cinco funciones sin prueba de cálculo | Pruebas con valores conocidos | `test_analytics_rf10.py` (8) |
+| Arrastre sin prueba de idempotencia | Ya no escribe nada; dos llamadas no cambian ninguna fila | `test_applying_writes_nothing_however_often_it_is_called` |
+| Aislamiento solo en el panel | Diez rutas de analítica más | `test_isolation.py`, verde en el CI del PR y de `main` |
+
+| Frase de E1 | Resultado |
+|---|---|
+| Ingresos contra gastos por mes · flujo semanal · por categoría · avance de presupuestos · mismo mes del año anterior | ✅ |
+| Evolución del patrimonio · tendencia por categoría · arrastre idempotente | ✅ |
+
+RF10 cumple el criterio desde el 02/11. Cuenta para el siguiente corte; la
+fila del 01/11 se queda como se midió.

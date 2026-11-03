@@ -32,7 +32,7 @@
 | 28 | Front: "Exportar datos" y "Reiniciar espacio" llaman rutas que el backend no tiene | Media | 25/10/2026 | 25/10/2026 | Corregido | f94015b · front 4ccf824 |
 | 29 | Front: "Plan your month" calculaba su propio mensual con × 4.333 | Media | 01/11/2026 | 01/11/2026 | Corregido | 5894da4 · front 6b220ed |
 | 30 | Front: Recurrentes estima el gasto mensual con × 4.33 | Baja | 01/11/2026 | | Abierto | |
-| 31 | El arrastre de saldo se guarda como movimiento real y se cuenta dos veces | Media | 02/11/2026 | | Abierto | |
+| 31 | El arrastre de saldo se guarda como movimiento real y se cuenta dos veces | Media | 02/11/2026 | 02/11/2026 | Corregido (opción A) | a8b8ebc · front b472ac3 |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -540,26 +540,11 @@ would have disagreed with the dashboard card. `/projected/monthly` now also
 returns `cost_breakdown`, each cost's share of the month, and the page shows
 that and the API's total instead of computing them.
 
----
-
-## Open
-
-### 30. Recurring rules estimate the monthly expense at × 4.33
-
-**Severity:** low · **Repo:** frontend · **Found:** 01/11, on the Recurring
-screen of `prueba-a` · **Status:** open, before H4
-
-*Recurring rules* sums its rules into a monthly figure with
-`amount × 4.33` (`RecurringPage.tsx`). A $500 rule every Monday shows
-$2,165.00, but November 2026 has five Mondays and the rule will generate
-$2,500. The transactions the rules generate are right; only the estimate on
-the summary cards is off, so RF07 still produces the correct result. Same
-fix as defect 29: take the figure from the API rather than compute it.
-
 ### 31. The carry-forward is stored as a real movement and counted twice
 
 **Severity:** medium · **Found:** 02/11, in the review of RF10 against E1
-(AP-5, `docs/verificacion-RF09-RF10.md`) · **Status:** open, before H4
+(AP-5, `docs/verificacion-RF09-RF10.md`) · **Fixed:** 02/11, commits
+`a8b8ebc` (API, PR #25), migration 014 and `b472ac3` (frontend, front PR #8)
 
 RF10 asks for the month's balance to be carried into the next one. The
 Dashboard does it on its own when it loads: `POST /analytics/carry-forward`
@@ -578,9 +563,38 @@ Two more problems in the same function: its idempotency rests on finding a
 row with that exact note, so editing the note lets it write again; and it
 checks and then inserts, so two Dashboards opened at once can both write
 it. Neither has a test. Nothing leaks and nothing is lost, but RF10 cannot
-count as verified while this alters its result. How to carry the balance
-without counting it twice (an opening balance for the month, or a marked
-movement left out of the analytics) is a product decision.
+count as verified while this alters its result.
+
+**Fix, option A (decided 02/11):** the carry-forward is the balance the month
+starts with — everything earned minus everything spent before its 1st, from
+`net_balance_before` — computed on demand and never written. With nothing
+to write, nothing is counted twice and there is nothing to apply twice.
+`POST /analytics/carry-forward` stays for the old frontend but writes
+nothing; the Dashboard now only reads it. Migration 014 removed the rows
+already written, after a backup and a preview; it matched exactly what the
+old code wrote. Tests: `tests/test_carry_forward.py`, five cases that all
+fail on the old code.
+
+Verified in production on 02/11 with `prueba-a`: the carry-forward row is
+gone, net worth is −$145 in October and November (it read −$290), the
+carry-forward reads −$145 from October, a POST answers the same and
+creates nothing, and the trend no longer counts it as spending.
+
+---
+
+## Open
+
+### 30. Recurring rules estimate the monthly expense at × 4.33
+
+**Severity:** low · **Repo:** frontend · **Found:** 01/11, on the Recurring
+screen of `prueba-a` · **Status:** open, before H4
+
+*Recurring rules* sums its rules into a monthly figure with
+`amount × 4.33` (`RecurringPage.tsx`). A $500 rule every Monday shows
+$2,165.00, but November 2026 has five Mondays and the rule will generate
+$2,500. The transactions the rules generate are right; only the estimate on
+the summary cards is off, so RF07 still produces the correct result. Same
+fix as defect 29: take the figure from the API rather than compute it.
 
 ---
 
