@@ -30,3 +30,36 @@ jobs:
       # network. test_isolation.py skips without its credentials.
       - name: Run pytest
         run: pytest -o addopts="" -rxs
+
+  # Every API call the frontend makes must have a route here (defect 28,
+  # and the coach's commitment for H4). Reads the frontend's main branch;
+  # the frontend runs the same test against this repository's main on its
+  # own pull requests. Require "routes" under Settings -> Branches -> main.
+  routes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: backendtrash/FrontendFinanceApp-
+          ref: main
+          path: frontend
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # EXPOS_REQUIRE_FRONTEND=1: a missing checkout fails instead of
+      # passing as skipped.
+      - name: Check the frontend's calls against the routes
+        env:
+          FRONTEND_DIR: frontend
+          EXPOS_REQUIRE_FRONTEND: "1"
+        run: pytest -o addopts="" -rxs tests/test_frontend_routes.py
