@@ -2,6 +2,9 @@
 
 FastAPI REST API for the BackendFinance personal finance application.
 
+Built for Studio JJPT, the responsible party named in the privacy notice. The
+course documents (Evidencias, actas) call the same company Studio A.
+
 ## Tech Stack
 
 - **Runtime:** Python 3.12

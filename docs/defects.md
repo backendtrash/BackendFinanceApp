@@ -33,6 +33,10 @@
 | 29 | Front: "Plan your month" calculaba su propio mensual con × 4.333 | Media | 01/11/2026 | 01/11/2026 | Corregido | 5894da4 · front 6b220ed |
 | 30 | Front: Recurrentes estima el gasto mensual con × 4.33 | Baja | 01/11/2026 | | Abierto | |
 | 31 | El arrastre de saldo se guarda como movimiento real y se cuenta dos veces | Media | 02/11/2026 | 02/11/2026 | Corregido (opción A) | a8b8ebc · front b472ac3 |
+| 32 | Front: el aviso de privacidad declaraba recabar el nombre, que el registro no pide | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido | front 2f94123 |
+| 33 | Front: el ícono de la pestaña decía "BT", del nombre anterior | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido | front 2f94123 |
+| 34 | El responsable del aviso (Studio JJPT) y el de la Evidencia (Studio A) no se explicaban | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido (documentado) | este PR |
+| 35 | Front: el inicio de sesión mostraba una reseña inventada | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido | front 2f94123 |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -579,6 +583,31 @@ Verified in production on 02/11 with `prueba-a`: the carry-forward row is
 gone, net worth is −$145 in October and November (it read −$290), the
 carry-forward reads −$145 from October, a POST answers the same and
 creates nothing, and the trend no longer counts it as spending.
+
+### 32–35. Activity 2 leftovers
+
+**Severity:** low · **Found:** in the review of Activity 2 (October), listed
+in the follow-up of that review · **Logged:** 13/11, late — they should
+have been logged the day the review raised them · **Fixed:** 13/11
+
+- **32. The notice declared a name the platform never asks for.** Its table
+  of data collected listed "Nombre, correo electrónico"; registration asks
+  only for an email. "Nombre" is removed (front `2f94123`). The notice is
+  dated 13/11/2026 and the API records consent against version
+  `2026-11-13`; less data is collected, so no new consent is asked of
+  existing accounts. A name is still asked for in a rights (ARCO) request,
+  to identify who writes, which is correct.
+- **33. The tab icon said "BT"**, from the old name the rename of defect 23
+  missed: it was a drawing in `public/favicon.svg`, not text the search
+  found. Now "BF".
+- **34. Two names for the responsible party.** The notice names Studio
+  JJPT; the Evidencias and the actas name the client Studio A. They are the
+  same company: Studio A is the name the course documents use for it. The
+  notice keeps the legal name, and `docs/decisiones/README.md` and the
+  README record the equivalence.
+- **35. A made-up review on the sign-in screen**, signed "Cashidy Bin,
+  Proud User", left from the proof of concept. No such user exists;
+  removed (front `2f94123`).
 
 ---
 
