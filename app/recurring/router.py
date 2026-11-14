@@ -80,6 +80,24 @@ async def list_recurring_rules(
 
 
 # ── Create Recurring Rule ─────────────────────────────────────────────────
+# Declared before "/{rule_id}", which would otherwise take "monthly" as an id.
+@router.get(
+    "/monthly",
+    status_code=status.HTTP_200_OK,
+    summary="What the active rules charge in a month, in MXN",
+)
+async def monthly_recurring(
+    year:  int,
+    month: int,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    if not 1 <= month <= 12:
+        raise HTTPException(status_code=400, detail="month must be between 1 and 12")
+    return await service.get_monthly_recurring(
+        user_id=current_user.user_id, year=year, month=month,
+    )
+
+
 @router.post(
     "/",
     response_model=RecurringRuleResponse,

@@ -147,6 +147,66 @@ async def create_recurring_rule(
     return result.data[0]
 
 
+def charge_dates_in_month(rule: dict, year: int, month: int) -> list[date]:
+    """
+    The dates a rule charges in a calendar month, as the scheduler will
+    write them.
+
+    weekly   every 7 days from next_due_date, both ways: calculate_next_due_date
+             always advances a week and keeps the weekday.
+    monthly  once, on day_of_month (or next_due_date's day), clamped to the
+             month's last day, as calculate_next_due_date does.
+
+    Only dates from start_date and up to end_date count.
+    """
+    first = date(year, month, 1)
+    last  = date(year, month, calendar.monthrange(year, month)[1])
+    start = date.fromisoformat(str(rule["start_date"])[:10])
+    end   = date.fromisoformat(str(rule["end_date"])[:10]) if rule.get("end_date") else None
+    anchor = date.fromisoformat(str(rule["next_due_date"])[:10])
+
+    if rule["frequency"] == FrequencyType.weekly.value:
+        offset = (anchor - first).days % 7
+        dates = [first + timedelta(days=d) for d in range(offset, (last - first).days + 1, 7)]
+    else:
+        day = rule.get("day_of_month") or anchor.day
+        dates = [date(year, month, min(day, last.day))]
+
+    return [d for d in dates if d >= start and (end is None or d <= end)]
+
+
+async def get_monthly_recurring(user_id: str, year: int, month: int) -> dict:
+    """
+    What the user's active rules will charge in a month, in MXN: per rule and
+    in total, by type. Defect 30: the Recurring screen worked this out itself
+    as amount x 4.33 a week, so a $500 rule every Monday showed $2,165 for a
+    November with five Mondays, where the scheduler writes $2,500.
+    """
+    rules = await list_recurring_rules(user_id, active_only=True)
+    rates = {
+        c["id"]: Decimal(str(c["exchange_rate"]))
+        for c in (db().table("currencies").select("id, exchange_rate").execute().data or [])
+    }
+
+    by_rule: dict = {}
+    totals = {"expense": Decimal("0"), "income": Decimal("0")}
+    for rule in rules:
+        charges = len(charge_dates_in_month(rule, year, month))
+        amount  = Decimal(str(rule["amount"])) * rates.get(rule.get("currency_id"), Decimal("1"))
+        monthly = amount * charges
+        totals[rule["type"]] += monthly
+        by_rule[rule["id"]] = {"charges": charges, "amount_mxn": round(monthly, 2)}
+
+    return {
+        "year":          year,
+        "month":         month,
+        "expense_total": round(totals["expense"], 2),
+        "income_total":  round(totals["income"], 2),
+        "net":           round(totals["income"] - totals["expense"], 2),
+        "rules":         by_rule,
+    }
+
+
 async def list_recurring_rules(
     user_id: str,
     active_only: bool = False,

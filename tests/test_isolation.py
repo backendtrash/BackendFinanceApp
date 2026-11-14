@@ -331,6 +331,20 @@ def test_user_b_analytics_never_carry_user_a_amounts(client_b, owned_rows, route
         assert amount not in response.text, f"user A's {amount} surfaced in user B's {route}"
 
 
+def test_user_b_monthly_recurring_excludes_user_a_rules(client_a, client_b, owned_rows):
+    """GET /recurring/monthly sums rules; A's rule must count for A only."""
+    _, rule_id = owned_rows["recurring"]
+    today = date.today()
+    params = {"year": today.year, "month": today.month}
+
+    mine = client_a.get("/api/v1/recurring/monthly", params=params)
+    theirs = client_b.get("/api/v1/recurring/monthly", params=params)
+
+    assert mine.status_code == theirs.status_code == 200
+    assert rule_id in mine.json()["rules"], "user A's rule is missing from A's month"
+    assert rule_id not in theirs.json()["rules"], "user A's rule counted in user B's month"
+
+
 def test_the_export_holds_only_the_callers_rows(client_a, client_b, owned_rows):
     """
     The export reads every table at once, so one missed filter would hand
