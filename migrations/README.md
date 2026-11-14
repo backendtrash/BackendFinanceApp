@@ -24,6 +24,8 @@ is safe and changes nothing.
 | `011_rpc_functions.sql` | `update_expense_date`, `update_earning_date`, `split_expense` |
 | `012_recurring_idempotency.sql` | one transaction per recurring rule per day (unique index) |
 | `013_analytics_aggregates.sql` | `net_balance_before`, `category_first_expense` (analytics, defects 7 and 8) |
+| `014_remove_carry_forward_rows.sql` | removes the carry-forward rows written before defect 31 (data only) |
+| `015_seed_currencies.sql` | USD and EUR in the catalog, rates fetched by the daily job (defect 36) |
 
 The order is a dependency order, not a preference. `currencies` and
 `categories` come first because almost everything references them;
