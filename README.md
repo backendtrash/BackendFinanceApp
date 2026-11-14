@@ -77,6 +77,48 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
+### The whole system on one machine
+
+To run API and frontend locally (H4 asks for exactly this), against the
+project's Supabase:
+
+1. **`.env`** with the variables above. Two lines matter locally:
+
+   ```env
+   SCHEDULER_ENABLED=false
+   ALLOWED_ORIGINS=http://localhost:5173
+   ```
+
+   **`SCHEDULER_ENABLED=false` is not optional.** The project has a single
+   Supabase database, production. With the scheduler on, a laptop would run
+   the startup catch-up and the nightly jobs — recurring rules, budget
+   alerts, exchange rates — against real users' data, alongside the server.
+
+2. **API:** `uvicorn app.main:app --reload --port 8000`. `GET
+   http://localhost:8000/health` answers `{"status": "healthy", ...}` and the
+   startup log says `Scheduler disabled`.
+
+3. **Frontend:** in the other repository, `corepack pnpm dev`; it calls
+   `http://localhost:8000` by default. Open `http://localhost:5173`.
+
+4. **Sign in with a test account** (`prueba-a` or `prueba-b`), not a personal
+   one: everything you do locally writes to the production database.
+
+Sign-up from a local frontend works, but the confirmation email links to the
+Site URL set in Supabase → Authentication → URL Configuration, which is the
+deployed frontend.
+
+### Scripts against the test accounts
+
+`scripts/` holds tools that sign in as `prueba-a` through the API, with the
+credentials in an env file kept outside the repository:
+
+| Script | What it does |
+|---|---|
+| `seed_prueba_a.py` | Loads a year of tagged data; a second run adds nothing |
+| `verificar_graficas.py` | The five essential charts against the account's rows (`docs/verificacion-graficas.md`) |
+| `e2e_api.py` | The main flows end to end, cleaning up after each (`docs/flujos-e2e.md`) |
+
 ### Database
 
 The schema lives in `migrations/`, numbered in dependency order. On a fresh
