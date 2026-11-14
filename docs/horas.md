@@ -14,6 +14,8 @@ a posteriori.
 | Semana 6 (12 al 18/10/2026) | 15 | 90 |
 | Semana 7 (19 al 25/10/2026) | 15 | 105 |
 | Semana 8 (26/10 al 01/11/2026) | 15 | 120 |
+| Semana 9 (02/11 al 08/11/2026) | 15 | 135 |
+| Semana 10 (09/11 al 15/11/2026), al 12/11 | 9 | 144 |
 
 El acumulado de 90 h al 18/10 es el que usa el IAC de ese corte
 (`kpis.md`: 92.8 ÷ 90 = 1.03).
@@ -40,3 +42,16 @@ El acumulado de 90 h al 18/10 es el que usa el IAC de ese corte
 | 01/11/2026 | 3.2 | | Defectos 9 y 10: una regla de proyección para todas las vistas (`app/projection.py`) |
 | 01/11/2026 | 3.4 | | Proyección futura aparte en Análisis y en el plan del mes; defecto 29 |
 | 01/11/2026 | 3.2 | | Verificación en producción de los defectos 7 a 10; registros del corte |
+| 02/11/2026 | 3.2 | | Revisión AP-5 de RF09 y RF10 contra E1; defecto 31 corregido; RF10 verificado |
+| 03/11/2026 | | 3 | *Por describir* |
+| 04/11/2026 | | 3 | *Por describir* |
+| 05/11/2026 | | 3 | *Por describir* |
+| 07/11/2026 | | 6 | *Por describir* |
+| 10/11/2026 | | 3 | *Por describir* |
+| 11/11/2026 | | 3 | *Por describir* |
+| 12/11/2026 | | 3 | *Por describir* |
+
+Desde la semana 9 las horas se registran por sesión. Las sesiones del 03 al
+12/11 se trabajaron sin llegar al repositorio; su descripción se completa con
+lo que se hizo en cada una. Las horas del 02/11 cuentan en la semana 9 (15 h
+en total) y no se desglosan aparte.

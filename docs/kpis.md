@@ -12,6 +12,7 @@ suite completa ese día, con los números que salen de esa corrida.
 | 25/10/2026 | 105 | 108.8 | 105 | 1.04 | 9 de 12 | 75% | 0 | 100% |
 | ~~01/11/2026~~ (reemplazada el 02/11) | 120 | 116 | 120 | 0.97 | 11 de 12 | 91.7% | 0 | 100% |
 | 01/11/2026 corregido (02/11) | 120 | 112.4 | 120 | 0.94 | 10 de 12 | 83.3% | 0 | 100% |
+| 08/11/2026 (medido el 13/11) | 135 | 111.6 | 135 | 0.83 | 10 de 12 | 83.3% | 0 | 100% |
 
 ### Contra las metas
 
@@ -35,6 +36,14 @@ suite completa ese día, con los números que salen de esa corrida.
   verificado ese día (`docs/verificacion-RF09-RF10.md`). Suma 3.6 h al VG del
   siguiente corte (08/11): 116 h con lo verificado al 02/11.
 - **ACP:** H3 se aprobó a la primera el 23/10 (`docs/hitos/acta-H3.pdf`).
+- **08/11, medido el 13/11.** Nada entró al repositorio entre el 03 y el
+  13/11, así que la fila describe `main` al 08/11. RF10 suma 3.6 h (verificado
+  el 02/11); RF05 deja de contar por el defecto 36, encontrado el 13/11: en
+  producción solo existía MXN. VG = 60 (análisis y diseño) + 17.6 (3.1, cuatro
+  de cinco) + 18 (3.2, cinco de cinco) + 16 (3.3) = 111.6 h; IAC 0.83. Es el
+  segundo corte debajo de 0.95 y el primero debajo de 0.90: el disparador de la
+  Actividad 1 pide dos seguidos debajo de 0.90. H4 no se hizo el 08/11; se
+  revisa el 14/11.
 
 ### Por qué se corrigió la fila del 18/10
 
