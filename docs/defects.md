@@ -31,12 +31,13 @@
 | 27 | La verificación del esquema marcaba una diferencia que solo eran saltos de línea | Baja | 25/10/2026 | 25/10/2026 | Corregido | 312cc87 |
 | 28 | Front: "Exportar datos" y "Reiniciar espacio" llaman rutas que el backend no tiene | Media | 25/10/2026 | 25/10/2026 | Corregido | f94015b · front 4ccf824 |
 | 29 | Front: "Plan your month" calculaba su propio mensual con × 4.333 | Media | 01/11/2026 | 01/11/2026 | Corregido | 5894da4 · front 6b220ed |
-| 30 | Front: Recurrentes estima el gasto mensual con × 4.33 | Baja | 01/11/2026 | | Abierto | |
+| 30 | Front: Recurrentes estima el gasto mensual con × 4.33 | Baja | 01/11/2026 | 13/11/2026 | Corregido | f751bb6 · front 203dc77 |
 | 31 | El arrastre de saldo se guarda como movimiento real y se cuenta dos veces | Media | 02/11/2026 | 02/11/2026 | Corregido (opción A) | a8b8ebc · front b472ac3 |
 | 32 | Front: el aviso de privacidad declaraba recabar el nombre, que el registro no pide | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido | front 2f94123 |
 | 33 | Front: el ícono de la pestaña decía "BT", del nombre anterior | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido | front 2f94123 |
-| 34 | El responsable del aviso (Studio JJPT) y el de la Evidencia (Studio A) no se explicaban | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido (documentado) | este PR |
+| 34 | El responsable del aviso (Studio JJPT) y el de la Evidencia (Studio A) no se explicaban | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido (documentado) | e311e4a |
 | 35 | Front: el inicio de sesión mostraba una reseña inventada | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido | front 2f94123 |
+| 36 | Producción solo tenía MXN: no se podía registrar un movimiento en otra divisa | Media | 13/11/2026 | | Abierto (falta el tipo de cambio real) | ee9821c |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -609,21 +610,48 @@ have been logged the day the review raised them · **Fixed:** 13/11
   Proud User", left from the proof of concept. No such user exists;
   removed (front `2f94123`).
 
+### 30. Recurring rules estimated the monthly expense at × 4.33
+
+**Severity:** low · **Repo:** frontend, with an API change · **Found:** 01/11
+· **Fixed:** 13/11, commits `f751bb6` (API, PR #27) and `203dc77` (frontend,
+front PR #9)
+
+*Recurring rules* summed each rule as `amount × 4.33` a week, and ignored its
+currency; *Plan your month* did the same for recurring income. A $500 rule
+every Monday showed $2,165 for November 2026, which has five Mondays: the
+scheduler writes $2,500. `GET /recurring/monthly` now counts the dates each
+rule really charges in the month, the way the scheduler writes them (weekly
+every 7 days from its next due date, monthly on its day clamped to the
+month's end, within its start and end dates), in MXN. Both screens read it.
+
+Verified in production on 13/11: a $500 rule every Monday from 01/11 reports
+5 charges and $2,500 for November; it was deleted straight after.
+
 ---
 
 ## Open
 
-### 30. Recurring rules estimate the monthly expense at × 4.33
 
-**Severity:** low · **Repo:** frontend · **Found:** 01/11, on the Recurring
-screen of `prueba-a` · **Status:** open, before H4
+### 36. Production had no currency but MXN
 
-*Recurring rules* sums its rules into a monthly figure with
-`amount × 4.33` (`RecurringPage.tsx`). A $500 rule every Monday shows
-$2,165.00, but November 2026 has five Mondays and the rule will generate
-$2,500. The transactions the rules generate are right; only the estimate on
-the summary cards is off, so RF07 still produces the correct result. Same
-fix as defect 29: take the figure from the API rather than compute it.
+**Severity:** medium · **Found:** 13/11, loading test data: the expense in
+dollars could not be created · **Status:** open until a real rate is fetched
+
+Migration 001 creates only the peso, and the daily rate job updates the
+currencies that exist without ever adding one. So production never had a
+second currency: nobody could record a movement in dollars, test case CP-03
+could not run, and RF05 — "un catálogo de divisas con su tipo de cambio
+respecto al peso mexicano" — was not met, although it counted as verified.
+The unit tests used a stub catalog that did include USD.
+
+The job could not have fetched a rate anyway: `EXCHANGE_RATE_API_KEY` was not
+set on the server, so every run since deployment was skipped. Nobody could
+trigger it by hand either: `ADMIN_EMAILS` was empty.
+
+Done on 13/11: migration 015 (`ee9821c`, PR #30) adds USD and EUR with
+provisional rates and `rate_updated_at` empty; the key was added on Railway.
+It closes when the job at 06:00 UTC on 15/11 fetches the real rates, CP-03
+passes, and RF05 is verified again.
 
 ---
 
@@ -649,3 +677,6 @@ fix as defect 29: take the figure from the API rather than compute it.
 - In `/analytics/projected`, each month's figures are rounded on their own,
   so the months shown can add up to a cent or two more or less than
   `total_projected + projected_future`, which are rounded once.
+- *Week View* splits a monthly budget into weeks as `monthly ÷ 4.33`. It is a
+  budget, not a projection, so defect 10's rule does not apply directly;
+  noted for when budgets are reviewed against E1.
