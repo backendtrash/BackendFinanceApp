@@ -52,5 +52,8 @@ Cuenta de prueba, November 2026. 193 gastos y 12 ingresos leídos.
 ## Pantallas
 
 Las cifras de la API son las que pinta el frontend: cada gráfica lee
-directamente su endpoint. Capturas del Panel y de Análisis con estos datos:
-`docs/capturas/` (pendientes de agregar).
+directamente su endpoint. Capturas del 14/11 con estos datos:
+`evidencia/panel-2026-11.png` (tarjetas, ingresos contra gastos, dona,
+flujo semanal y avance de presupuestos) y `evidencia/analisis-2026-11.png`.
+Las cifras visibles coinciden con la tabla: gastos del mes $4,017.00, Comida
+$2,105.00 al 105.3%, proyectado $9,500.00.
