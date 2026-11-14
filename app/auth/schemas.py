@@ -5,7 +5,7 @@ from typing import Optional
 # Version of the privacy notice a new account accepts. Stored with the
 # consent so it is always known which text a user agreed to; bump it when
 # the notice changes and new consent is needed.
-PRIVACY_NOTICE_VERSION = "2026-10-19"
+PRIVACY_NOTICE_VERSION = "2026-11-13"
 
 
 class RegisterRequest(BaseModel):

@@ -34,3 +34,10 @@ Las pruebas `xfail` llevan `raises=AssertionError`: solo cuentan como fallo
 esperado si falla la aserción del defecto, y no cualquier otro error.
 
 Las actas de los puntos de control están en `docs/hitos/`.
+
+## Studio JJPT y Studio A
+
+Son la misma empresa. Studio JJPT es su nombre legal y es el que aparece como
+responsable en el aviso de privacidad (`/privacidad`). Studio A es el nombre
+con el que los documentos del curso (Evidencias, actividades y actas) se
+refieren al cliente del proyecto. Registrado el 13/11/2026 (defecto 34).
