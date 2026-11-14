@@ -680,3 +680,7 @@ passes, and RF05 is verified again.
 - *Week View* splits a monthly budget into weeks as `monthly ÷ 4.33`. It is a
   budget, not a projection, so defect 10's rule does not apply directly;
   noted for when budgets are reviewed against E1.
+- The Dashboard asks for at most 200 expenses and 200 earnings of the month
+  for the PDF's tables; a month with more would list only the first 200,
+  while the totals stay right. The listing's docstring says its cap is 100;
+  the validator allows 500. Both noted on 14/11, verifying RF12.
