@@ -26,19 +26,39 @@ marcado `[cp]` y se borra al terminar cada caso.
 es del servidor. Medido con 30 llamadas a las 14:00: media de 599 ms (p90 de
 690 ms), y el panel 671 ms.
 
-## Manuales
+## En el navegador
 
-| Caso | Fecha | Resultado esperado | Resultado obtenido | Estado | Evidencia |
-|---|---|---|---|---|---|
-| CP-01 | | Se crea la cuenta, llega el correo de confirmación y el enlace abre la sesión | | Pendiente | |
-| CP-02 (pantalla) | | Sin sesión, la dirección de gastos lleva a la pantalla de acceso | | Pendiente | |
-| CP-06 (pantalla) | | Al borrar una categoría en uso, la pantalla explica por qué no se puede | | Pendiente | |
-| CP-10 (pantalla) | | Con la cuenta B, las gráficas muestran su mensaje de vacío | | Pendiente | |
-| CP-12 | 14/11/2026 | El PDF muestra los mismos totales que el Panel | Iguales en todas sus cifras | ✅ Pasa | `docs/verificacion-RF12.md` |
-| CP-13 (formulario) | | Con el token vencido, el formulario se envía sin perder datos | | Pendiente | |
-| CP-14 | | Las once pantallas en un teléfono, legibles y sin desbordamiento | | Pendiente | Una captura por pantalla |
+`scripts/pruebas_navegador.py` maneja un Chromium real (Playwright) contra el
+frontend publicado, con las dos cuentas de prueba. El 401 de CP-13 se simula
+respondiendo 401 una vez a la petición del formulario, que es lo que el
+navegador recibe cuando el token vence. CP-14 se corrió en el tamaño de un
+iPhone 13, emulado.
+
+| Caso | Resultado esperado | Resultado obtenido | Estado | Evidencia |
+|---|---|---|---|---|
+| CP-02 (pantalla) | Sin sesión, la dirección de gastos lleva a la pantalla de acceso | /expenses terminó en /login | ✅ Pasa | `capturas/cp02-sin-sesion.jpg` |
+| CP-10 (pantalla) | Con la cuenta B, las gráficas muestran su mensaje de vacío, sin error | mensajes: ['No expenses this month']; errores de la página: 0 | ✅ Pasa | `capturas/cp10-vacio-dashboard.png, cp10-vacio-analytics.jpg` |
+| 4.2 Aislamiento en el navegador | En las once pantallas, B no ve ningún dato de A | A ve sus datos en 10 pantallas (dashboard, expenses, earnings, weeks, budgets, recurring, projected, goals, categories, analytics); B ve datos de A en 0 | ✅ Pasa | `capturas/aislamiento-*.jpg` (22) |
+| CP-06 (pantalla) | Al borrar una categoría en uso, se impide y la pantalla explica por qué | la categoría sigue: True; la pantalla explica el motivo: False; error no manejado en la página: Request failed with status code 409 | ❌ Falla | `capturas/cp06-borrar-categoria-en-uso.jpg` |
+| CP-13 (formulario) | Con el token vencido, se renueva y el formulario se envía sin perder datos | 401 simulado: 1; renovaciones del token: 1; categoría guardada con el nombre escrito: True | ✅ Pasa | `capturas/cp13-token-vencido.jpg` |
+| CP-14 (emulado) | Las once pantallas en un teléfono, legibles y sin desbordamiento horizontal | tamaño de iPhone 13 (390×844), emulado: desbordan 0 | ✅ Pasa | `capturas/`capturas/cp14-movil-*.jpg` (11) |
+
+**CP-06 falla: defecto 38.** La API impide el borrado (la categoría sigue),
+pero la pantalla no dice por qué: el 409 queda como error sin manejar en la
+página. La captura muestra además "0 system defaults": en producción no había
+categorías predefinidas (defecto 39).
+
+## Pendientes
+
+| Caso | Por qué queda pendiente |
+|---|---|
+| CP-01 | Necesita un correo real: registrarse, recibir la confirmación y entrar |
+| CP-14 en un teléfono real | La corrida fue emulada; la Evidencia 2 pide un dispositivo real |
 
 ## Resumen al 22/11
 
-- **Por la API:** 10 casos, 9 pasan y 1 falla (CP-11, defecto 37).
-- **Manuales:** 1 hecho (CP-12); 6 pendientes de hacer en el navegador y el teléfono.
+| | Corridos | Pasan | Fallan | Pendientes |
+|---|---|---|---|---|
+| Por la API | 10 | 9 | 1 (CP-11, defecto 37) | — |
+| En el navegador | 5 | 4 | 1 (CP-06, defecto 38) | — |
+| A mano | 1 (CP-12, el 14/11) | 1 | — | 2 (CP-01; CP-14 en un teléfono real) |

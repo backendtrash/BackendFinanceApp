@@ -39,6 +39,8 @@
 | 35 | Front: el inicio de sesión mostraba una reseña inventada | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido | front 2f94123 |
 | 36 | Producción solo tenía MXN: no se podía registrar un movimiento en otra divisa | Media | 13/11/2026 | 22/11/2026 | Corregido | ee9821c |
 | 37 | La comparación anual y el panel tardan más de 500 ms en el servidor (CP-11, RNF-03) | Media | 22/11/2026 | | Abierto | |
+| 38 | Front: borrar una categoría en uso no dice por qué no se puede (CP-06) | Baja | 22/11/2026 | | Abierto (corrección en front PR #13) | |
+| 39 | En producción no había categorías predefinidas (RF04) | Media | 22/11/2026 | | Abierto (migración 016, PR #36) | |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -683,6 +685,30 @@ sums match the rows — so the result is correct but slow.
 Likely fix, cheapest first: run the API in the same region as the database
 (Railway → service → Settings → Region → US East), then measure again; if
 that is not enough, run each endpoint's queries concurrently.
+
+### 38. Deleting a category in use does not say why it cannot be done
+
+**Severity:** low · **Repo:** frontend · **Found:** 22/11, running CP-06 in
+the browser · **Status:** open; the fix is front PR #13
+
+The API refuses the delete with 409 and the reason, as it should, and the
+category stays. The screen shows nothing: the delete button awaited the
+request without catching it, so the rejection went unhandled ("Request
+failed with status code 409" in the page) and the click seemed to do
+nothing. Defect 13, in October, fixed this message where categories are
+created; deleting never had it. The fix shows the reason above the list.
+
+### 39. Production had no predefined categories
+
+**Severity:** medium · **Found:** 22/11, in the CP-06 screenshot: "0 system
+defaults" · **Status:** open; the fix is migration 016 (PR #36)
+
+RF04 asks for "un catálogo de categorías predefinidas, comunes a todos los
+usuarios". Migration 002 made room for them — a null user_id marks a system
+category, readable by everyone and writable by no one — but no migration
+inserted any: every account started with no categories (prueba-b has none).
+The same gap as defect 36 with currencies. RF04 does not count as verified
+until 016 runs in production.
 
 ---
 
