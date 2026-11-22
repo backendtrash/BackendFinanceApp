@@ -15,7 +15,8 @@ a posteriori.
 | Semana 7 (19 al 25/10/2026) | 15 | 105 |
 | Semana 8 (26/10 al 01/11/2026) | 15 | 120 |
 | Semana 9 (02/11 al 08/11/2026) | 15 | 135 |
-| Semana 10 (09/11 al 15/11/2026), al 12/11 | 9 | 144 |
+| Semana 10 (09/11 al 15/11/2026) | 15 | 150 |
+| Semana 11 (16/11 al 22/11/2026) | 15 | 165 |
 
 El acumulado de 90 h al 18/10 es el que usa el IAC de ese corte
 (`kpis.md`: 92.8 ÷ 90 = 1.03).
@@ -55,3 +56,10 @@ Desde la semana 9 las horas se registran por sesión. Las sesiones del 03 al
 12/11 se trabajaron sin llegar al repositorio; su descripción se completa con
 lo que se hizo en cada una. Las horas del 02/11 cuentan en la semana 9 (15 h
 en total) y no se desglosan aparte.
+| 13/11/2026 | 3.4 / 3.5 | | Defectos 30 y 36; prueba de rutas en CI; datos de prueba; las cinco gráficas; flujos de extremo a extremo; acta de H4 |
+| 14/11/2026 | 3.4 / 3.6 | 6 | RF12 verificado contra E1; sesión de H4 |
+| 17/11/2026 | | 3 | *Por describir* |
+| 18/11/2026 | | 3 | *Por describir* |
+| 19/11/2026 | | 3 | *Por describir* |
+| 21/11/2026 | | 6 | *Por describir* |
+| 22/11/2026 | 4.1 / 4.2 / 4.3 | | Casos de prueba por la API, corrida formal de aislamiento, mapeo de casos, guion de aceptación; defectos 36 y 37 |
