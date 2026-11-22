@@ -37,7 +37,8 @@
 | 33 | Front: el ícono de la pestaña decía "BT", del nombre anterior | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido | front 2f94123 |
 | 34 | El responsable del aviso (Studio JJPT) y el de la Evidencia (Studio A) no se explicaban | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido (documentado) | e311e4a |
 | 35 | Front: el inicio de sesión mostraba una reseña inventada | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido | front 2f94123 |
-| 36 | Producción solo tenía MXN: no se podía registrar un movimiento en otra divisa | Media | 13/11/2026 | | Abierto (falta el tipo de cambio real) | ee9821c |
+| 36 | Producción solo tenía MXN: no se podía registrar un movimiento en otra divisa | Media | 13/11/2026 | 22/11/2026 | Corregido | ee9821c |
+| 37 | La comparación anual y el panel tardan más de 500 ms en el servidor (CP-11, RNF-03) | Media | 22/11/2026 | | Abierto | |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -627,15 +628,11 @@ month's end, within its start and end dates), in MXN. Both screens read it.
 Verified in production on 13/11: a $500 rule every Monday from 01/11 reports
 5 charges and $2,500 for November; it was deleted straight after.
 
----
-
-## Open
-
-
 ### 36. Production had no currency but MXN
 
 **Severity:** medium · **Found:** 13/11, loading test data: the expense in
-dollars could not be created · **Status:** open until a real rate is fetched
+dollars could not be created · **Fixed:** migration 015 (`ee9821c`, PR #30)
+and the rate key on the server, 13/11 · **Closed:** 22/11, with CP-03
 
 Migration 001 creates only the peso, and the daily rate job updates the
 currencies that exist without ever adding one. So production never had a
@@ -650,8 +647,42 @@ trigger it by hand either: `ADMIN_EMAILS` was empty.
 
 Done on 13/11: migration 015 (`ee9821c`, PR #30) adds USD and EUR with
 provisional rates and `rate_updated_at` empty; the key was added on Railway.
-It closes when the job at 06:00 UTC on 15/11 fetches the real rates, CP-03
-passes, and RF05 is verified again.
+Closed on 22/11: the daily job had fetched real rates (USD 19.124116 and EUR
+20.981956, updated 22/11 at 06:00 UTC; each run overwrites the date, so the
+first fetch after 13/11 is not recorded). CP-03 passes in production: an
+expense of US$100.00 keeps its amount and is stored as $1,912.41 MXN at that
+rate (`docs/pruebas/casos-funcionales.md`). RF05 is verified again from
+22/11.
+
+---
+
+## Open
+
+
+### 37. The yearly comparison and the Dashboard take over 500 ms on the server
+
+**Severity:** medium · **Found:** 22/11, running CP-11 · **Status:** open
+
+CP-11 asks for the yearly comparison, on an account with 200 movements over
+twelve months, in under 500 ms; RNF-03 asks the same of the most used
+endpoints on average. Measured from Juárez on 22/11, 30 calls each:
+
+| Endpoint | Mean | p90 |
+|---|---|---|
+| `/health` (no database) | 46 ms | 52 ms |
+| `/expenses/` (one query) | 324 ms | 355 ms |
+| `/analytics/year-over-year` (four queries) | 599 ms | 690 ms |
+| `/analytics/dashboard` | 671 ms | 711 ms |
+
+The network accounts for about 45 ms; the rest is the server. A single
+query costs about 150 ms, and the yearly comparison makes four, one after
+another. The API runs on Railway in US West and the database is Supabase in
+us-east-1: every query crosses the continent. The totals are right — CP-11's
+sums match the rows — so the result is correct but slow.
+
+Likely fix, cheapest first: run the API in the same region as the database
+(Railway → service → Settings → Region → US East), then measure again; if
+that is not enough, run each endpoint's queries concurrently.
 
 ---
 

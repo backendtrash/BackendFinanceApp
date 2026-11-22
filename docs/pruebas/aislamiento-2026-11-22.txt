@@ -1,0 +1,53 @@
+Prueba de aislamiento con dos cuentas (paquete 4.2) — corrida formal del 22/11/2026
+=======================================================================================
+
+Cuentas: prueba-a y prueba-b (reales, en la base de producción).
+Suite: tests/test_isolation.py, 36 casos.
+
+1. Contra la API publicada en Railway (lo que usan los usuarios)
+   EXPOS_TEST_BASE_URL=https://backendfinanceapp-production.up.railway.app
+   EXPOS_REQUIRE_ISOLATION=1, corrida desde esta máquina el 22/11/2026.
+
+   test_user_b_cannot_read_user_a_row[categories] PASSED [  2%]
+   test_user_b_cannot_read_user_a_row[expenses] PASSED [  5%]
+   test_user_b_cannot_read_user_a_row[earnings] PASSED [  8%]
+   test_user_b_cannot_read_user_a_row[budgets] PASSED [ 11%]
+   test_user_b_cannot_read_user_a_row[recurring] PASSED [ 13%]
+   test_user_b_cannot_read_user_a_row[goals] PASSED [ 16%]
+   test_user_b_cannot_delete_user_a_row[categories] PASSED [ 19%]
+   test_user_b_cannot_delete_user_a_row[expenses] PASSED [ 22%]
+   test_user_b_cannot_delete_user_a_row[earnings] PASSED [ 25%]
+   test_user_b_cannot_delete_user_a_row[budgets] PASSED [ 27%]
+   test_user_b_cannot_delete_user_a_row[recurring] PASSED [ 30%]
+   test_user_b_cannot_delete_user_a_row[goals] PASSED [ 33%]
+   test_user_b_cannot_delete_user_a_row[projected] PASSED [ 36%]
+   test_user_b_cannot_modify_user_a_projected_cost PASSED [ 38%]
+   test_user_b_listing_excludes_user_a_rows[categories] PASSED [ 41%]
+   test_user_b_listing_excludes_user_a_rows[expenses] PASSED [ 44%]
+   test_user_b_listing_excludes_user_a_rows[earnings] PASSED [ 47%]
+   test_user_b_listing_excludes_user_a_rows[budgets] PASSED [ 50%]
+   test_user_b_listing_excludes_user_a_rows[recurring] PASSED [ 52%]
+   test_user_b_listing_excludes_user_a_rows[goals] PASSED [ 55%]
+   test_user_b_listing_excludes_user_a_rows[projected] PASSED [ 58%]
+   test_user_b_analytics_excludes_user_a_amounts PASSED [ 61%]
+   test_user_b_analytics_never_carry_user_a_amounts[/api/v1/analytics/monthly?months_back=3] PASSED [ 63%]
+   test_user_b_analytics_never_carry_user_a_amounts[/api/v1/analytics/weekly?weeks_back=4] PASSED [ 66%]
+   test_user_b_analytics_never_carry_user_a_amounts[/api/v1/analytics/categories] PASSED [ 69%]
+   test_user_b_analytics_never_carry_user_a_amounts[/api/v1/analytics/projected] PASSED [ 72%]
+   test_user_b_analytics_never_carry_user_a_amounts[/api/v1/analytics/budget-progress] PASSED [ 75%]
+   test_user_b_analytics_never_carry_user_a_amounts[/api/v1/analytics/net-worth?months_back=3] PASSED [ 77%]
+   test_user_b_analytics_never_carry_user_a_amounts[/api/v1/analytics/trends?months_back=3] PASSED [ 80%]
+   test_user_b_analytics_never_carry_user_a_amounts[/api/v1/analytics/year-over-year?year={y}&month={m}] PASSED [ 83%]
+   test_user_b_analytics_never_carry_user_a_amounts[/api/v1/analytics/dashboard-weekly?year={y}&month={m}] PASSED [ 86%]
+   test_user_b_analytics_never_carry_user_a_amounts[/api/v1/analytics/carry-forward?year={y}&month={m}] PASSED [ 88%]
+   test_user_b_monthly_recurring_excludes_user_a_rules PASSED [ 91%]
+   test_the_export_holds_only_the_callers_rows PASSED [ 94%]
+   test_each_user_has_their_own_preferences PASSED [ 97%]
+   test_me_returns_the_right_identity_for_each_token PASSED [100%]
+   ============================= 36 passed in 26.61s =============================
+
+2. En el CI, con la API levantada desde el código de main (c1937b7) contra la base de producción
+   GitHub Actions, workflow "isolation", run 43627115481, intento 2, iniciado 2026-11-22T21:02:47Z
+   Resultado: 36 passed in 10.27s
+
+Ninguna corrida encontró datos de una cuenta en la otra.
