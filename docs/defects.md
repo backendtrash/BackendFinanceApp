@@ -39,8 +39,8 @@
 | 35 | Front: el inicio de sesión mostraba una reseña inventada | Baja | Revisión de la Actividad 2 | 13/11/2026 | Corregido | front 2f94123 |
 | 36 | Producción solo tenía MXN: no se podía registrar un movimiento en otra divisa | Media | 13/11/2026 | 22/11/2026 | Corregido | ee9821c |
 | 37 | La comparación anual y el panel tardan más de 500 ms en el servidor (CP-11, RNF-03) | Media | 22/11/2026 | | Abierto | |
-| 38 | Front: borrar una categoría en uso no dice por qué no se puede (CP-06) | Baja | 22/11/2026 | | Abierto (corrección en front PR #13) | |
-| 39 | En producción no había categorías predefinidas (RF04) | Media | 22/11/2026 | | Abierto (migración 016, PR #36) | |
+| 38 | Front: borrar una categoría en uso no dice por qué no se puede (CP-06) | Baja | 22/11/2026 | 22/11/2026 | Corregido | front 4814ea7 |
+| 39 | En producción no había categorías predefinidas (RF04) | Media | 22/11/2026 | 22/11/2026 | Corregido | d5afde9 |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -656,6 +656,34 @@ expense of US$100.00 keeps its amount and is stored as $1,912.41 MXN at that
 rate (`docs/pruebas/casos-funcionales.md`). RF05 is verified again from
 22/11.
 
+### 38. Deleting a category in use does not say why it cannot be done
+
+**Severity:** low · **Repo:** frontend · **Found:** 22/11, running CP-06 in
+the browser · **Fixed:** 22/11, commit `4814ea7` (front PR #13); CP-06
+passes in the browser at 15:20
+
+The API refuses the delete with 409 and the reason, as it should, and the
+category stays. The screen shows nothing: the delete button awaited the
+request without catching it, so the rejection went unhandled ("Request
+failed with status code 409" in the page) and the click seemed to do
+nothing. Defect 13, in October, fixed this message where categories are
+created; deleting never had it. The fix shows the reason above the list.
+
+### 39. Production had no predefined categories
+
+**Severity:** medium · **Found:** 22/11, in the CP-06 screenshot: "0 system
+defaults" · **Fixed:** 22/11, migration 016 (`d5afde9`, PR #36), run in
+production the same day
+
+RF04 asks for "un catálogo de categorías predefinidas, comunes a todos los
+usuarios". Migration 002 made room for them — a null user_id marks a system
+category, readable by everyone and writable by no one — but no migration
+inserted any: every account started with no categories (prueba-b has none).
+The same gap as defect 36 with currencies. Verified in production on 22/11:
+both test accounts see the same 13 system categories (nine for expenses,
+four for income), and account B gets 404 trying to delete or rename one.
+RF04 is verified again.
+
 ---
 
 ## Open
@@ -686,29 +714,13 @@ Likely fix, cheapest first: run the API in the same region as the database
 (Railway → service → Settings → Region → US East), then measure again; if
 that is not enough, run each endpoint's queries concurrently.
 
-### 38. Deleting a category in use does not say why it cannot be done
-
-**Severity:** low · **Repo:** frontend · **Found:** 22/11, running CP-06 in
-the browser · **Status:** open; the fix is front PR #13
-
-The API refuses the delete with 409 and the reason, as it should, and the
-category stays. The screen shows nothing: the delete button awaited the
-request without catching it, so the rejection went unhandled ("Request
-failed with status code 409" in the page) and the click seemed to do
-nothing. Defect 13, in October, fixed this message where categories are
-created; deleting never had it. The fix shows the reason above the list.
-
-### 39. Production had no predefined categories
-
-**Severity:** medium · **Found:** 22/11, in the CP-06 screenshot: "0 system
-defaults" · **Status:** open; the fix is migration 016 (PR #36)
-
-RF04 asks for "un catálogo de categorías predefinidas, comunes a todos los
-usuarios". Migration 002 made room for them — a null user_id marks a system
-category, readable by everyone and writable by no one — but no migration
-inserted any: every account started with no categories (prueba-b has none).
-The same gap as defect 36 with currencies. RF04 does not count as verified
-until 016 runs in production.
+**22/11, 15:00, after changing the region:** no improvement. Measured the
+same way, `/health` went from 46 to about 190 ms (the server is now further
+from Juárez), and the server's own time did not move: about 150 ms per
+query, about 610 ms for the yearly comparison. A server next to its database
+would answer a query in a few milliseconds, so either the move did not take
+effect or the time is not spent on distance. Next: confirm the region in
+Railway and time each step on the server.
 
 ---
 

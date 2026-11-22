@@ -43,10 +43,18 @@ iPhone 13, emulado.
 | CP-13 (formulario) | Con el token vencido, se renueva y el formulario se envía sin perder datos | 401 simulado: 1; renovaciones del token: 1; categoría guardada con el nombre escrito: True | ✅ Pasa | `capturas/cp13-token-vencido.jpg` |
 | CP-14 (emulado) | Las once pantallas en un teléfono, legibles y sin desbordamiento horizontal | tamaño de iPhone 13 (390×844), emulado: desbordan 0 | ✅ Pasa | `capturas/`capturas/cp14-movil-*.jpg` (11) |
 
-**CP-06 falla: defecto 38.** La API impide el borrado (la categoría sigue),
-pero la pantalla no dice por qué: el 409 queda como error sin manejar en la
-página. La captura muestra además "0 system defaults": en producción no había
-categorías predefinidas (defecto 39).
+**CP-06 falló a las 14:30: defecto 38.** La API impedía el borrado, pero la
+pantalla no decía por qué. Su captura mostraba además "0 system defaults": en
+producción no había categorías predefinidas (defecto 39). Con las dos
+correcciones desplegadas (front PR #13 y migración 016), la corrida de las
+15:20 dio:
+
+| Caso | Resultado esperado | Resultado obtenido | Estado | Evidencia |
+|---|---|---|---|---|
+| CP-06 (pantalla) | Al borrar una categoría en uso, se impide y la pantalla explica por qué | la categoría sigue: True; la pantalla explica el motivo: True | ✅ Pasa | `capturas/cp06-borrar-categoria-en-uso.jpg` |
+
+Las capturas de `capturas/` son las de esa segunda corrida; las cinco pruebas
+de navegador y la de aislamiento pasaron.
 
 ## Pendientes
 
@@ -59,6 +67,12 @@ categorías predefinidas (defecto 39).
 
 | | Corridos | Pasan | Fallan | Pendientes |
 |---|---|---|---|---|
-| Por la API | 10 | 9 | 1 (CP-11, defecto 37) | — |
-| En el navegador | 5 | 4 | 1 (CP-06, defecto 38) | — |
+| Por la API | 10 | 9 | 1 (CP-11, defecto 37; repetido a las 15:20) | — |
+| En el navegador | 5 | 5 (CP-06 tras corregir el defecto 38) | — | — |
 | A mano | 1 (CP-12, el 14/11) | 1 | — | 2 (CP-01; CP-14 en un teléfono real) |
+
+**CP-11 repetido a las 15:20**, después de cambiar la región del servidor:
+
+| Caso | Resultado esperado (Evidencia 2) | Resultado obtenido | Estado |
+|---|---|---|---|
+| CP-11 | 200 movimientos en 12 meses: comparación anual en menos de 500 ms y totales correctos | Fail: 193 gastos en doce meses; comparación anual: media 677 ms, p90 802 ms en 20 llamadas (la red sola, 160 ms); total del mes $4,017.00 igual a la suma de las filas | ❌ Falla |
