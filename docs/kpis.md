@@ -14,7 +14,7 @@ suite completa ese día, con los números que salen de esa corrida.
 | 01/11/2026 corregido (02/11) | 120 | 112.4 | 120 | 0.94 | 10 de 12 | 83.3% | 0 | 100% |
 | 08/11/2026 (medido el 13/11) | 135 | 111.6 | 135 | 0.83 | 10 de 12 | 83.3% | 0 | 100% |
 | 14/11/2026 (H4, medido el 22/11) | 150 | 123.6 | 150 | 0.82 | 11 de 12 | 91.7% | 0 | 100% |
-| 22/11/2026 | 165 | 135 | 165 | 0.82 | 12 de 12 | 100% | 0 | 100% |
+| 22/11/2026 | 165 | 130.6 | 165 | 0.79 | 11 de 12 | 91.7% | 0 | 100% |
 
 ### Contra las metas
 
@@ -123,20 +123,23 @@ entregable; las compuertas al aprobarse.
 | Concepto | 14/11 | 22/11 |
 |---|---|---|
 | Análisis y diseño | 60 | 60 |
-| 3.1 (RF01 a RF05) | 17.6 (RF05 fuera, defecto 36) | 22 (RF05 verificado el 22/11, CP-03) |
+| 3.1 (RF01 a RF05) | 17.6 (RF05 fuera, defecto 36) | 17.6 (RF05 verificado el 22/11 con CP-03; RF04 fuera, defecto 39) |
 | 3.2 (RF06 a RF10) | 18 | 18 |
 | 3.3 Frontend base | 16 | 16 |
 | 3.4 Frontend de analítica | 10 (cinco gráficas el 13/11, RF12 el 14/11) | 10 |
 | 3.5 Integración | 0 (faltaban las etiquetas de E5 y E6) | 7 (etiquetas `v1.0-h4` el 22/11) |
 | 3.6 H3 y H4 | 2 (H4 aprobado el 14/11) | 2 |
 | 4.1 y 4.2 | — | 0: se ganan al completar su entregable; quedan casos manuales |
-| **VG** | **123.6** | **135** |
+| **VG** | **123.6** | **130.6** |
 
 - **La Actividad 1 del bloque III reporta otras cifras para el 14/11** (IAC
   0.95 y 12 de 12). Con la regla de arriba no se sostienen: al 14/11 RF05 no
   cumplía (defecto 36, cerrado el 22/11) y E5 y E6 no estaban etiquetados.
+- **RF04 sale el 22/11** por el defecto 39: en producción no había
+  categorías predefinidas. Vuelve a contar cuando la migración 016 corra en
+  producción y se verifique.
 - **Disparador de la Actividad 1:** el IAC lleva tres cortes seguidos debajo
-  de 0.90 (0.83, 0.82 y 0.82). Corresponde el plan de recuperación revisado con
+  de 0.90 (0.83, 0.82 y 0.79). Corresponde el plan de recuperación revisado con
   el coach.
 - **ACP-F** (compuertas firmadas en la fecha de la revisión) no se mide en esta
   tabla; la Actividad 1 la reporta en 50% (2 de 4).
@@ -148,10 +151,11 @@ pytest                               ->  365 passed, 2 skipped
 test_frontend_routes.py (frontend)   ->  2 passed
 test_isolation.py contra Railway     ->  36 passed
 casos_prueba.py contra producción    ->  9 de 10 pasan (CP-11 falla: defecto 37)
+pruebas_navegador.py (frontend)      ->  4 de 5 pasan (CP-06 falla: defecto 38); aislamiento en las 11 pantallas
 ```
 
 - **Skipped (2):** `test_isolation.py` sin credenciales y
   `test_frontend_routes.py` sin el frontend; los dos corren en el CI, donde
   fallan si faltan, y se corrieron aparte el 22/11 (arriba).
-- **Defectos** (de `docs/defects.md`): 37 registrados, 36 corregidos, 1
-  abierto (37, severidad media).
+- **Defectos** (de `docs/defects.md`): 39 registrados, 36 corregidos, 3
+  abiertos (37 y 39 de severidad media, 38 baja).
