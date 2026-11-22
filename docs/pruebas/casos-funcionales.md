@@ -37,7 +37,7 @@ iPhone 13, emulado.
 | Caso | Resultado esperado | Resultado obtenido | Estado | Evidencia |
 |---|---|---|---|---|
 | CP-02 (pantalla) | Sin sesión, la dirección de gastos lleva a la pantalla de acceso | /expenses terminó en /login | ✅ Pasa | `capturas/cp02-sin-sesion.jpg` |
-| CP-10 (pantalla) | Con la cuenta B, las gráficas muestran su mensaje de vacío, sin error | mensajes: ['No expenses this month']; errores de la página: 0 | ✅ Pasa | `capturas/cp10-vacio-dashboard.png, cp10-vacio-analytics.jpg` |
+| CP-10 (pantalla) | Con la cuenta B, las gráficas muestran su mensaje de vacío, sin error | mensajes: ['No expenses this month']; errores de la página: 0 | ✅ Pasa | `capturas/cp10-vacio-dashboard.jpg`, `capturas/cp10-vacio-analytics.jpg` |
 | 4.2 Aislamiento en el navegador | En las once pantallas, B no ve ningún dato de A | A ve sus datos en 10 pantallas (dashboard, expenses, earnings, weeks, budgets, recurring, projected, goals, categories, analytics); B ve datos de A en 0 | ✅ Pasa | `capturas/aislamiento-*.jpg` (22) |
 | CP-06 (pantalla) | Al borrar una categoría en uso, se impide y la pantalla explica por qué | la categoría sigue: True; la pantalla explica el motivo: False; error no manejado en la página: Request failed with status code 409 | ❌ Falla | `capturas/cp06-borrar-categoria-en-uso.jpg` |
 | CP-13 (formulario) | Con el token vencido, se renueva y el formulario se envía sin perder datos | 401 simulado: 1; renovaciones del token: 1; categoría guardada con el nombre escrito: True | ✅ Pasa | `capturas/cp13-token-vencido.jpg` |
