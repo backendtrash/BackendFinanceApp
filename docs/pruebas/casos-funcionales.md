@@ -56,20 +56,28 @@ correcciones desplegadas (front PR #13 y migración 016), la corrida de las
 Las capturas de `capturas/` son las de esa segunda corrida; las cinco pruebas
 de navegador y la de aislamiento pasaron.
 
-## Pendientes
+## A mano, con correo y teléfono reales
 
-| Caso | Por qué queda pendiente |
-|---|---|
-| CP-01 | Necesita un correo real: registrarse, recibir la confirmación y entrar |
-| CP-14 en un teléfono real | La corrida fue emulada; la Evidencia 2 pide un dispositivo real |
+| Caso | Fecha | Resultado esperado | Resultado obtenido | Estado | Evidencia |
+|---|---|---|---|---|---|
+| CP-01 | 22/11/2026 | Se crea la cuenta aceptando el aviso, llega el correo de confirmación y el enlace abre la sesión | Cuenta nueva con el aviso aceptado; el correo de Supabase llegó a las 21:26; con la cuenta confirmada, el Panel abre con sesión | ✅ Pasa | `capturas/cp01-1-registro.jpg`, `cp01-2-correo-confirmacion.jpg`, `cp01-3-sesion-iniciada.jpg` |
+| CP-14 | 22/11/2026 | Las once pantallas en un teléfono real, legibles y operables, sin desbordamiento horizontal | iPhone, navegador del teléfono: las once pantallas se leen completas y ninguna se desplaza de lado | ✅ Pasa | `capturas/cp14-telefono-01-dashboard.jpg` a `-11-settings.jpg` |
+
+El correo de la cuenta está difuminado en las capturas. Observación sin defecto:
+el correo de confirmación usa la plantilla genérica de Supabase, sin el nombre
+de BackendFinance.
 
 ## Resumen al 22/11
+
+**Los 14 casos de la Evidencia 2 están ejecutados: 13 pasan y CP-11 falla**
+(defecto 37, en corrección dentro de 4.4). Con eso el paquete 4.1 entrega
+sus resultados completos.
 
 | | Corridos | Pasan | Fallan | Pendientes |
 |---|---|---|---|---|
 | Por la API | 10 | 9 | 1 (CP-11, defecto 37; repetido a las 15:20) | — |
 | En el navegador | 5 | 5 (CP-06 tras corregir el defecto 38) | — | — |
-| A mano | 1 (CP-12, el 14/11) | 1 | — | 2 (CP-01; CP-14 en un teléfono real) |
+| A mano | 3 (CP-12 el 14/11; CP-01 y CP-14 el 22/11) | 3 | — | — |
 
 **CP-11 repetido a las 15:20**, después de cambiar la región del servidor:
 
