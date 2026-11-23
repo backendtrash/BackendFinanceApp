@@ -139,9 +139,10 @@ entregable; las compuertas al aprobarse.
 - **RF04 el 22/11:** el defecto 39 (sin categorías predefinidas en
   producción) se encontró a las 14:30 y se corrigió y verificó a las 15:20,
   antes de llenar esta fila.
-- **Disparador de la Actividad 1:** el IAC lleva tres cortes seguidos debajo
-  de 0.90 al 14/11 (0.83 y 0.82); el 22/11 sube a 0.92 al cerrarse 4.1 y 4.2. Corresponde el plan de recuperación revisado con
-  el coach.
+- **Disparador de la Actividad 1** (dos cortes seguidos debajo de 0.90): se
+  cumplió con el 08/11 (0.83) y el 14/11 (0.82). Corresponde el plan de
+  recuperación revisado con el coach. El 22/11 el IAC sube a 0.92, al
+  cerrarse 4.1 y 4.2, todavía debajo de la meta de 0.95.
 - **ACP-F** (compuertas firmadas en la fecha de la revisión) no se mide en esta
   tabla; la Actividad 1 la reporta en 50% (2 de 4).
 
