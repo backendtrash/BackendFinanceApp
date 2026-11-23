@@ -51,3 +51,10 @@ Suite: tests/test_isolation.py, 36 casos.
    Resultado: 36 passed in 10.27s
 
 Ninguna corrida encontró datos de una cuenta en la otra.
+
+3. En el navegador, con las dos cuentas (scripts/pruebas_navegador.py)
+   Las once pantallas del frontend publicado, primero con prueba-a y luego con
+   prueba-b, con una captura de cada una (docs/pruebas/capturas/aislamiento-*.jpg).
+   Los datos de prueba-a llevan la marca [seed-h4]. Resultado: prueba-a ve sus
+   datos en 10 pantallas (todas menos Configuración); prueba-b no ve ningún
+   dato de prueba-a en ninguna de las 11.

@@ -26,19 +26,61 @@ marcado `[cp]` y se borra al terminar cada caso.
 es del servidor. Medido con 30 llamadas a las 14:00: media de 599 ms (p90 de
 690 ms), y el panel 671 ms.
 
-## Manuales
+## En el navegador
+
+`scripts/pruebas_navegador.py` maneja un Chromium real (Playwright) contra el
+frontend publicado, con las dos cuentas de prueba. El 401 de CP-13 se simula
+respondiendo 401 una vez a la petición del formulario, que es lo que el
+navegador recibe cuando el token vence. CP-14 se corrió en el tamaño de un
+iPhone 13, emulado.
+
+| Caso | Resultado esperado | Resultado obtenido | Estado | Evidencia |
+|---|---|---|---|---|
+| CP-02 (pantalla) | Sin sesión, la dirección de gastos lleva a la pantalla de acceso | /expenses terminó en /login | ✅ Pasa | `capturas/cp02-sin-sesion.jpg` |
+| CP-10 (pantalla) | Con la cuenta B, las gráficas muestran su mensaje de vacío, sin error | mensajes: ['No expenses this month']; errores de la página: 0 | ✅ Pasa | `capturas/cp10-vacio-dashboard.jpg`, `capturas/cp10-vacio-analytics.jpg` |
+| 4.2 Aislamiento en el navegador | En las once pantallas, B no ve ningún dato de A | A ve sus datos en 10 pantallas (dashboard, expenses, earnings, weeks, budgets, recurring, projected, goals, categories, analytics); B ve datos de A en 0 | ✅ Pasa | `capturas/aislamiento-*.jpg` (22) |
+| CP-06 (pantalla) | Al borrar una categoría en uso, se impide y la pantalla explica por qué | la categoría sigue: True; la pantalla explica el motivo: False; error no manejado en la página: Request failed with status code 409 | ❌ Falla | `capturas/cp06-borrar-categoria-en-uso.jpg` |
+| CP-13 (formulario) | Con el token vencido, se renueva y el formulario se envía sin perder datos | 401 simulado: 1; renovaciones del token: 1; categoría guardada con el nombre escrito: True | ✅ Pasa | `capturas/cp13-token-vencido.jpg` |
+| CP-14 (emulado) | Las once pantallas en un teléfono, legibles y sin desbordamiento horizontal | tamaño de iPhone 13 (390×844), emulado: desbordan 0 | ✅ Pasa | `capturas/`capturas/cp14-movil-*.jpg` (11) |
+
+**CP-06 falló a las 14:30: defecto 38.** La API impedía el borrado, pero la
+pantalla no decía por qué. Su captura mostraba además "0 system defaults": en
+producción no había categorías predefinidas (defecto 39). Con las dos
+correcciones desplegadas (front PR #13 y migración 016), la corrida de las
+15:20 dio:
+
+| Caso | Resultado esperado | Resultado obtenido | Estado | Evidencia |
+|---|---|---|---|---|
+| CP-06 (pantalla) | Al borrar una categoría en uso, se impide y la pantalla explica por qué | la categoría sigue: True; la pantalla explica el motivo: True | ✅ Pasa | `capturas/cp06-borrar-categoria-en-uso.jpg` |
+
+Las capturas de `capturas/` son las de esa segunda corrida; las cinco pruebas
+de navegador y la de aislamiento pasaron.
+
+## A mano, con correo y teléfono reales
 
 | Caso | Fecha | Resultado esperado | Resultado obtenido | Estado | Evidencia |
 |---|---|---|---|---|---|
-| CP-01 | | Se crea la cuenta, llega el correo de confirmación y el enlace abre la sesión | | Pendiente | |
-| CP-02 (pantalla) | | Sin sesión, la dirección de gastos lleva a la pantalla de acceso | | Pendiente | |
-| CP-06 (pantalla) | | Al borrar una categoría en uso, la pantalla explica por qué no se puede | | Pendiente | |
-| CP-10 (pantalla) | | Con la cuenta B, las gráficas muestran su mensaje de vacío | | Pendiente | |
-| CP-12 | 14/11/2026 | El PDF muestra los mismos totales que el Panel | Iguales en todas sus cifras | ✅ Pasa | `docs/verificacion-RF12.md` |
-| CP-13 (formulario) | | Con el token vencido, el formulario se envía sin perder datos | | Pendiente | |
-| CP-14 | | Las once pantallas en un teléfono, legibles y sin desbordamiento | | Pendiente | Una captura por pantalla |
+| CP-01 | 22/11/2026 | Se crea la cuenta aceptando el aviso, llega el correo de confirmación y el enlace abre la sesión | Cuenta nueva con el aviso aceptado; el correo de Supabase llegó a las 21:26; con la cuenta confirmada, el Panel abre con sesión | ✅ Pasa | `capturas/cp01-1-registro.jpg`, `cp01-2-correo-confirmacion.jpg`, `cp01-3-sesion-iniciada.jpg` |
+| CP-14 | 22/11/2026 | Las once pantallas en un teléfono real, legibles y operables, sin desbordamiento horizontal | iPhone, navegador del teléfono: las once pantallas se leen completas y ninguna se desplaza de lado | ✅ Pasa | `capturas/cp14-telefono-01-dashboard.jpg` a `-11-settings.jpg` |
+
+El correo de la cuenta está difuminado en las capturas. Observación sin defecto:
+el correo de confirmación usa la plantilla genérica de Supabase, sin el nombre
+de BackendFinance.
 
 ## Resumen al 22/11
 
-- **Por la API:** 10 casos, 9 pasan y 1 falla (CP-11, defecto 37).
-- **Manuales:** 1 hecho (CP-12); 6 pendientes de hacer en el navegador y el teléfono.
+**Los 14 casos de la Evidencia 2 están ejecutados: 13 pasan y CP-11 falla**
+(defecto 37, en corrección dentro de 4.4). Con eso el paquete 4.1 entrega
+sus resultados completos.
+
+| | Corridos | Pasan | Fallan | Pendientes |
+|---|---|---|---|---|
+| Por la API | 10 | 9 | 1 (CP-11, defecto 37; repetido a las 15:20) | — |
+| En el navegador | 5 | 5 (CP-06 tras corregir el defecto 38) | — | — |
+| A mano | 3 (CP-12 el 14/11; CP-01 y CP-14 el 22/11) | 3 | — | — |
+
+**CP-11 repetido a las 15:20**, después de cambiar la región del servidor:
+
+| Caso | Resultado esperado (Evidencia 2) | Resultado obtenido | Estado |
+|---|---|---|---|
+| CP-11 | 200 movimientos en 12 meses: comparación anual en menos de 500 ms y totales correctos | Fail: 193 gastos en doce meses; comparación anual: media 677 ms, p90 802 ms en 20 llamadas (la red sola, 160 ms); total del mes $4,017.00 igual a la suma de las filas | ❌ Falla |
