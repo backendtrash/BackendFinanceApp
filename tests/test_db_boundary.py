@@ -255,7 +255,104 @@ def test_dropping_a_request_client_does_not_close_the_pool(monkeypatch):
     assert database._POOL not in closed
 
 
+def _server_timing(header: str) -> dict:
+    """'app;dur=1.0, db;dur=2.0;desc="1 consultas"' -> {name: {dur, desc}}."""
+    metrics = {}
+    for part in header.split(", "):
+        name, *params = part.split(";")
+        metrics[name] = dict(p.split("=", 1) for p in params)
+    return metrics
+
+
 def test_every_response_reports_its_server_time(client):
-    timing = client.get("/health").headers["Server-Timing"]
-    assert timing.startswith("app;dur=")
-    assert float(timing.split("=")[1]) >= 0
+    timing = _server_timing(client.get("/health").headers["Server-Timing"])
+    assert float(timing["app"]["dur"]) >= 0
+    # /health touches neither the client nor the database.
+    assert float(timing["client"]["dur"]) == 0
+    assert timing["db"]["desc"] == '"0 consultas"'
+
+
+def test_a_with_block_around_a_request_client_does_not_close_the_pool(monkeypatch):
+    closed = []
+    monkeypatch.setattr(
+        httpx.HTTPTransport, "__exit__", lambda self, *exc: closed.append(self)
+    )
+    with httpx.Client(transport=database._POOL):
+        pass
+    assert closed == []
+
+
+def test_the_pool_times_each_round_trip_for_the_current_request(monkeypatch):
+    monkeypatch.setattr(
+        httpx.HTTPTransport, "handle_request",
+        lambda self, request: httpx.Response(200, json=[]),
+    )
+
+    def one_request():
+        timings = database.start_timings()
+        database._POOL.handle_request(httpx.Request("GET", "https://db.example/rest/v1/x"))
+        database._POOL.handle_request(httpx.Request("GET", "https://db.example/rest/v1/y"))
+        return timings
+
+    timings = contextvars.copy_context().run(one_request)
+    assert len(timings.db_ms) == 2
+    assert all(ms >= 0 for ms in timings.db_ms)
+
+
+def test_round_trips_outside_a_request_are_not_timed(monkeypatch):
+    # The scheduler has no request and no timings; the pool must not fail.
+    monkeypatch.setattr(
+        httpx.HTTPTransport, "handle_request",
+        lambda self, request: httpx.Response(200, json=[]),
+    )
+    response = contextvars.copy_context().run(
+        database._POOL.handle_request, httpx.Request("GET", "https://db.example/rest/v1/x")
+    )
+    assert response.status_code == 200
+
+
+# ── Queries run together (defect 37) ────────────────────────────────────────
+
+async def test_run_parallel_returns_results_in_the_order_given():
+    results = await database.run_parallel(lambda: "a", lambda: "b", lambda: "c")
+    assert results == ["a", "b", "c"]
+
+
+async def test_run_parallel_runs_the_queries_at_the_same_time():
+    # Each "query" waits until all three have started. Run one after
+    # another, the first would wait forever and the barrier would time out.
+    import threading
+
+    barrier = threading.Barrier(3, timeout=5)
+
+    def query(n):
+        return lambda: (barrier.wait(), n)[1]
+
+    assert await database.run_parallel(query(1), query(2), query(3)) == [1, 2, 3]
+
+
+async def test_run_parallel_queries_see_this_requests_client():
+    # The worker threads must not lose the binding: without it db() raises,
+    # and with someone else's client RLS would answer for the wrong user.
+    mine = FakeSupabase()
+    database.bind_db(mine)
+
+    seen = await database.run_parallel(db, db)
+
+    assert seen == [mine, mine]
+
+
+async def test_two_requests_in_parallel_each_keep_their_own_client():
+    import asyncio
+
+    async def request(client):
+        database.bind_db(client)
+        return await database.run_parallel(db, db)
+
+    a, b = FakeSupabase(), FakeSupabase()
+    seen_a, seen_b = await asyncio.gather(
+        asyncio.create_task(request(a)), asyncio.create_task(request(b))
+    )
+
+    assert seen_a == [a, a]
+    assert seen_b == [b, b]

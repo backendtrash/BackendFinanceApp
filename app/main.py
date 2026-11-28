@@ -87,6 +87,7 @@ import time
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
+from app.database import start_timings
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
@@ -112,16 +113,25 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 class ServerTimingMiddleware(BaseHTTPMiddleware):
     """
-    Server-Timing: app;dur=<ms> on every response: how long the request
-    took inside the server, without the network. With it, a slow response
-    seen from outside can be split into server time and travel time
-    (defect 37, RNF-03).
+    Server-Timing on every response, so a slow response seen from outside
+    can be split into server time and travel time (defect 37, RNF-03):
+
+      app     how long the request took inside the server
+      client  building the user's Supabase client
+      db      waiting on the database, summed over its queries (queries run
+              together add up to more than the time they took); desc says
+              how many there were
     """
     async def dispatch(self, request: StarletteRequest, call_next):
+        timings = start_timings()
         started = time.perf_counter()
         response = await call_next(request)
         elapsed = (time.perf_counter() - started) * 1000
-        response.headers["Server-Timing"] = f"app;dur={elapsed:.1f}"
+        response.headers["Server-Timing"] = (
+            f"app;dur={elapsed:.1f}, "
+            f"client;dur={timings.client_ms:.1f}, "
+            f'db;dur={sum(timings.db_ms):.1f};desc="{len(timings.db_ms)} consultas"'
+        )
         return response
 
 app.add_middleware(ServerTimingMiddleware)

@@ -1,6 +1,8 @@
+import asyncio
+import time
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from typing import Iterator, Optional
+from typing import Any, Callable, Iterator, Optional
 
 import httpx
 from postgrest import SyncPostgrestClient
@@ -71,6 +73,28 @@ supabase_admin: Client = create_supabase_admin_client()
 _db: ContextVar[Optional[Client]] = ContextVar("db", default=None)
 
 
+class RequestTimings:
+    """
+    Where a request's time goes on the server, for its Server-Timing header
+    (defect 37): building the user's client, and each round trip to the
+    database. The middleware creates one per request; worker threads from
+    run_parallel get a copy of the context and add to the same object.
+    """
+
+    def __init__(self) -> None:
+        self.client_ms = 0.0
+        self.db_ms: list[float] = []   # list.append is safe across threads
+
+
+_timings: ContextVar[Optional[RequestTimings]] = ContextVar("timings", default=None)
+
+
+def start_timings() -> RequestTimings:
+    timings = RequestTimings()
+    _timings.set(timings)
+    return timings
+
+
 class _SharedTransport(httpx.HTTPTransport):
     """
     The connection pool to Supabase, shared by every request (defect 37).
@@ -86,7 +110,22 @@ class _SharedTransport(httpx.HTTPTransport):
     not close the pool under the others, so close() does nothing.
     """
 
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        started = time.perf_counter()
+        try:
+            return super().handle_request(request)
+        finally:
+            timings = _timings.get()
+            if timings is not None:
+                timings.db_ms.append((time.perf_counter() - started) * 1000)
+
     def close(self) -> None:
+        pass
+
+    def __exit__(self, *exc) -> None:
+        # httpx.Client.__exit__ closes its transport through here, not through
+        # close(): a `with` around any request's client would otherwise close
+        # the pool under every other request.
         pass
 
 
@@ -118,6 +157,7 @@ def create_user_client(access_token: str) -> Client:
     token arrives already verified and dies with the request, so there is no
     session to keep or refresh.
     """
+    started = time.perf_counter()
     client = create_client(
         settings.supabase_url,
         settings.supabase_anon_key,
@@ -135,6 +175,9 @@ def create_user_client(access_token: str) -> Client:
         schema=client.options.schema,
         timeout=client.options.postgrest_client_timeout,
     )
+    timings = _timings.get()
+    if timings is not None:
+        timings.client_ms += (time.perf_counter() - started) * 1000
     return client
 
 
@@ -174,6 +217,24 @@ def db() -> Client:
             "from get_current_user; background jobs must use using_db()."
         )
     return client
+
+
+async def run_parallel(*queries: Callable[[], Any]) -> list:
+    """
+    Runs independent queries at the same time and returns their results in
+    the order given.
+
+    The Supabase client is synchronous, so a query awaited inside an async
+    service still runs one after another and holds the event loop while it
+    waits on the network. Each query here goes to a worker thread instead;
+    asyncio.to_thread copies the context, so db() in the thread returns this
+    request's client and RLS still sees this request's user. The threads
+    share the connection pool (_POOL), which is safe to use concurrently.
+
+    Defect 37: the yearly comparison made four round trips in a row to the
+    database. Run together they cost about one.
+    """
+    return list(await asyncio.gather(*(asyncio.to_thread(q) for q in queries)))
 
 
 def fetch_one(query) -> Optional[dict]:
