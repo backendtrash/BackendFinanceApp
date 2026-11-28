@@ -15,6 +15,7 @@ and that background jobs see the admin client and nothing else does.
 import contextvars
 import pathlib
 
+import httpx
 import pytest
 from fastapi.security import HTTPAuthorizationCredentials
 
@@ -206,3 +207,55 @@ async def test_rate_refresh_runs_as_the_system(monkeypatch):
         assert db() is user_client, "the system context leaked past the job"
 
     assert seen == [supabase_admin]
+
+
+# ── Shared connection pool (defect 37) ────────────────────────────────────
+# Every request's client draws its connections from one pool, so a request
+# no longer pays a TCP and TLS handshake to the database. Only connections
+# are shared: each request still sends its own user's token.
+
+def test_user_clients_share_the_pool_but_not_the_token():
+    a = database.create_user_client("token.of.a")
+    b = database.create_user_client("token.of.b")
+
+    assert a.postgrest.session._transport is database._POOL
+    assert b.postgrest.session._transport is database._POOL
+    assert a.postgrest.session.headers["Authorization"] == "Bearer token.of.a"
+    assert b.postgrest.session.headers["Authorization"] == "Bearer token.of.b"
+
+
+def test_each_query_carries_its_own_users_token_through_the_shared_pool(monkeypatch):
+    """Interleaved queries from two users over one pool: no token crosses."""
+    seen = []
+
+    def handler(request):
+        seen.append((request.url.path, request.headers["Authorization"]))
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(database, "_POOL", httpx.MockTransport(handler))
+    a = database.create_user_client("token.of.a")
+    b = database.create_user_client("token.of.b")
+
+    a.table("expenses").select("*").execute()
+    b.table("expenses").select("*").execute()
+    a.rpc("net_balance_before", {"p_user_id": "x", "p_before": "2026-01-01"}).execute()
+    b.table("earnings").select("*").execute()
+
+    assert [auth for _, auth in seen] == [
+        "Bearer token.of.a", "Bearer token.of.b", "Bearer token.of.a", "Bearer token.of.b",
+    ]
+
+
+def test_dropping_a_request_client_does_not_close_the_pool(monkeypatch):
+    closed = []
+    monkeypatch.setattr(httpx.HTTPTransport, "close", lambda self: closed.append(self))
+
+    database.create_user_client("token.of.a").postgrest.session.close()
+
+    assert database._POOL not in closed
+
+
+def test_every_response_reports_its_server_time(client):
+    timing = client.get("/health").headers["Server-Timing"]
+    assert timing.startswith("app;dur=")
+    assert float(timing.split("=")[1]) >= 0
