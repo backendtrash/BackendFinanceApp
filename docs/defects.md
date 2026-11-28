@@ -41,6 +41,7 @@
 | 37 | La comparación anual y el panel tardan más de 500 ms en el servidor (CP-11, RNF-03) | Media | 22/11/2026 | | Abierto | |
 | 38 | Front: borrar una categoría en uso no dice por qué no se puede (CP-06) | Baja | 22/11/2026 | 22/11/2026 | Corregido | front 4814ea7 |
 | 39 | En producción no había categorías predefinidas (RF04) | Media | 22/11/2026 | 22/11/2026 | Corregido | d5afde9 |
+| 40 | Front: no hay tutorial de uso dentro de la aplicación (aceptación) | Baja | 25–26/11/2026 | | Abierto (front PR #14) | |
 
 Commits marked *front* are in
 [`backendtrash/FrontendFinanceApp-`](https://github.com/backendtrash/FrontendFinanceApp-);
@@ -721,6 +722,24 @@ query, about 610 ms for the yearly comparison. A server next to its database
 would answer a query in a few milliseconds, so either the move did not take
 effect or the time is not spent on distance. Next: confirm the region in
 Railway and time each step on the server.
+
+---
+
+### 40. There is no usage guide inside the app
+
+**Severity:** low · **Repo:** frontend · **Found:** 25 or 26/11, in the
+acceptance sessions (4.3) · **Logged:** 28/11, the day the survey results
+arrived · **Status:** open, fix in review (front PR #14)
+
+One of the five participants rated the platform 3.9 out of 5 instead of 5
+"porque faltaba un tutorial de uso". The user manual exists
+(`docs/manual-usuario.md`, one section per screen with screenshots), but
+nothing in the app points to it. The fix adds "Help · user guide" to the
+sidebar, opening the manual in a new tab. A guided tour inside the app is
+not part of the fix.
+
+Logged two or three days after it was found, not the same day: the finding
+reached the project with the survey results.
 
 ---
 

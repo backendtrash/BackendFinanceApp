@@ -21,22 +21,26 @@ De la Actividad 3 (tabla 9, desembolso real contra presupuesto):
 
 | Fecha | Concepto | Monto | Estado |
 |---|---|---|---|
-| 01/11/2026 | Railway | 89 | Por confirmar el monto |
 | 17/11/2026 | Railway | 89 | Confirmado |
+| Por registrar | Dominio | 200 | Confirmado el monto (28/11); falta la fecha de compra |
+
+Hasta el 28/11 se había anotado otro cargo de Railway el 01/11, con el monto
+por confirmar. El 28/11 se confirmó que los cargos después del 25/10 son
+$89 de Railway y $200 del dominio, así que ese renglón se quitó.
 
 | | Monto |
 |---|---|
 | Acumulado al 25/10 | 1,146 |
-| Cargos de noviembre | 178 |
-| **Acumulado al 28/11** | **1,324** |
+| Railway | 89 |
+| Dominio | 200 |
+| **Acumulado al 28/11** | **1,435** |
 
-**Diferencia por aclarar:** el plan de cierre calcula $1,373 ($1,284 + $89).
-Con los cargos registrados aquí dan $1,324; los $49 de diferencia no
-corresponden a ningún cargo confirmado.
+**Contra el presupuesto:** $1,435 de $2,900 (49%), sin usar la reserva de
+contingencia de $600. El dominio costó $200, $50 menos que los $250
+previstos.
 
 ## Pendientes
 
 | Concepto | Fecha prevista | Monto previsto |
 |---|---|---|
-| Dominio | Por comprar | 250 |
 | Railway de diciembre | Diciembre | 89 |

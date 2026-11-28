@@ -54,24 +54,38 @@ entra si falla.
 **Sesiones:** 25 y 26/11/2026, con el guion de seis tareas
 (`docs/pruebas/guion-aceptacion.md`) y la encuesta de satisfacción de 1 a 5.
 
-| Participante | Tareas completadas | Promedio (preguntas 1 a 8) |
-|---|---|---|
-| *Pendiente de los resultados* | | |
+Cinco participantes. Cada calificación es el promedio de un participante en
+la encuesta de 1 a 5; el orden de la tabla no corresponde al de las
+sesiones.
 
-**Promedio general:** *pendiente* · **Criterio de H5:** 4.0 o más.
+| Participante | Calificación | Observación |
+|---|---|---|
+| 1 | 5.0 | |
+| 2 | 5.0 | |
+| 3 | 5.0 | |
+| 4 | 5.0 | |
+| 5 | 3.9 | Faltaba un tutorial de uso (defecto 40) |
+
+**Promedio general: 4.78** ((4 × 5.0 + 3.9) / 5) · **Criterio de H5:** 4.0 o
+más: **se cumple.**
+
+Las tareas completadas por participante no se registraron en los
+resultados entregados; no se reportan.
 
 **Comentarios** (tal como los escribieron):
 
-- *Pendiente*
+- "La plataforma me permite ver mis gastos y me ayudan a ahorrar."
+- "Las gráficas me permiten ahorrar tiempo de mi vida y planear mis inversiones."
 
 ## 4. Defectos de la fase
 
 | # | Defecto | Severidad | Estado |
 |---|---|---|---|
 | 36 | Producción solo tenía MXN; no se podía registrar en otra divisa | Media | Corregido (22/11) |
-| 37 | La comparación anual y el panel tardaban más de 500 ms en el servidor | Media | Corrección en revisión (PR #38): un solo pool de conexiones a la base |
+| 37 | La comparación anual y el panel tardaban más de 500 ms en el servidor | Media | Abierto. Pool de conexiones integrado (PR #38): de 610 a 406 ms en el servidor, todavía 631 ms desde fuera. Consultas en paralelo en revisión (PR #44) |
 | 38 | Borrar una categoría en uso no decía por qué | Baja | Corregido (22/11) |
 | 39 | En producción no había categorías predefinidas | Media | Corregido (22/11) |
+| 40 | No había tutorial de uso dentro de la aplicación (aceptación) | Baja | Enlace al manual en revisión (front PR #14) |
 
 **Defectos de severidad alta abiertos: 0.**
 
@@ -80,6 +94,6 @@ entra si falla.
 | Condición de H5 | Estado |
 |---|---|
 | Todos los casos de prueba ejecutados | ✅ 14 de 14 |
-| Sin defectos críticos abiertos | ✅ 0 altos; 1 medio (37) en corrección |
+| Sin defectos críticos abiertos | ✅ 0 altos; abiertos 1 medio (37) y 1 bajo (40), ambos en corrección |
 | Aislamiento verificado | ✅ 36 de 36 y las once pantallas |
-| Satisfacción de 4.0 o más | *Pendiente de los resultados de la encuesta* |
+| Satisfacción de 4.0 o más | ✅ 4.78 de 5, cinco participantes |
