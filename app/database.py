@@ -2,6 +2,9 @@ from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from typing import Iterator, Optional
 
+import httpx
+from postgrest import SyncPostgrestClient
+from postgrest.utils import SyncClient
 from supabase import create_client, Client
 from supabase.lib.client_options import ClientOptions
 
@@ -68,6 +71,41 @@ supabase_admin: Client = create_supabase_admin_client()
 _db: ContextVar[Optional[Client]] = ContextVar("db", default=None)
 
 
+class _SharedTransport(httpx.HTTPTransport):
+    """
+    The connection pool to Supabase, shared by every request (defect 37).
+
+    Each request builds its own client, with its own headers. Without a
+    shared pool, each also opened its own connection: a TCP and TLS
+    handshake to the database before the first query of every request,
+    several round trips that were most of the time of a short request.
+
+    Only connections are shared. Headers live on each request's client and
+    the pool never sees them, so one user's token cannot reach another
+    user's request. A client is dropped with its request; closing it must
+    not close the pool under the others, so close() does nothing.
+    """
+
+    def close(self) -> None:
+        pass
+
+
+_POOL = _SharedTransport(http2=True)
+
+
+class _PooledPostgrestClient(SyncPostgrestClient):
+    """PostgREST client whose session draws its connections from _POOL."""
+
+    def create_session(self, base_url, headers, timeout, verify=True) -> SyncClient:
+        return SyncClient(
+            base_url=base_url,
+            headers=headers,
+            timeout=timeout,
+            follow_redirects=True,
+            transport=_POOL,
+        )
+
+
 def create_user_client(access_token: str) -> Client:
     """
     A client that acts as the user who owns `access_token`.
@@ -80,7 +118,7 @@ def create_user_client(access_token: str) -> Client:
     token arrives already verified and dies with the request, so there is no
     session to keep or refresh.
     """
-    return create_client(
+    client = create_client(
         settings.supabase_url,
         settings.supabase_anon_key,
         options=ClientOptions(
@@ -89,6 +127,15 @@ def create_user_client(access_token: str) -> Client:
             persist_session=False,
         ),
     )
+    # The same PostgREST client supabase-py would build, with the same
+    # headers, but on the shared connection pool.
+    client._postgrest = _PooledPostgrestClient(
+        client.rest_url,
+        headers=client.options.headers,
+        schema=client.options.schema,
+        timeout=client.options.postgrest_client_timeout,
+    )
+    return client
 
 
 def bind_db(client: Client) -> Token:

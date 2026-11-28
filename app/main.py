@@ -83,6 +83,8 @@ async def rate_limit_handler(request, exc):
 
 
 # ── CORS Middleware ───────────────────────────────────────────────────────
+import time
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
@@ -106,6 +108,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+
+class ServerTimingMiddleware(BaseHTTPMiddleware):
+    """
+    Server-Timing: app;dur=<ms> on every response: how long the request
+    took inside the server, without the network. With it, a slow response
+    seen from outside can be split into server time and travel time
+    (defect 37, RNF-03).
+    """
+    async def dispatch(self, request: StarletteRequest, call_next):
+        started = time.perf_counter()
+        response = await call_next(request)
+        elapsed = (time.perf_counter() - started) * 1000
+        response.headers["Server-Timing"] = f"app;dur={elapsed:.1f}"
+        return response
+
+app.add_middleware(ServerTimingMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
