@@ -4,7 +4,7 @@ from typing import Optional
 import calendar
 import logging
 
-from app.database import db, fetch_one
+from app.database import db, fetch_one, run_parallel
 from app.projection import amount_in_range, monthly_amount, split_rounded
 
 # ── Logger ────────────────────────────────────────────────────────────────
@@ -25,9 +25,8 @@ def month_label(year: int, month: int) -> str:
 PROJECTED_FIELDS = "amount, frequency, currency_id, day_of_week, day_of_month, month, year"
 
 
-def _active_projected_costs(user_id: str) -> list[dict]:
-    """The user's active projected costs, each with its MXN rate as "_rate"."""
-    costs = (
+def _fetch_active_projected(user_id: str) -> list[dict]:
+    return (
         db()
         .table("projected_costs")
         .select(PROJECTED_FIELDS)
@@ -35,13 +34,23 @@ def _active_projected_costs(user_id: str) -> list[dict]:
         .eq("is_active", True)
         .execute()
     ).data or []
-    rates = {
-        c["id"]: Decimal(str(c["exchange_rate"]))
-        for c in (db().table("currencies").select("id, exchange_rate").execute().data or [])
-    }
+
+
+def _fetch_rates() -> list[dict]:
+    return db().table("currencies").select("id, exchange_rate").execute().data or []
+
+
+def _with_rates(costs: list[dict], currencies: list[dict]) -> list[dict]:
+    """Adds each cost's MXN rate as "_rate"."""
+    rates = {c["id"]: Decimal(str(c["exchange_rate"])) for c in currencies}
     for cost in costs:
         cost["_rate"] = rates.get(cost.get("currency_id"), Decimal("1"))
     return costs
+
+
+def _active_projected_costs(user_id: str) -> list[dict]:
+    """The user's active projected costs, each with its MXN rate as "_rate"."""
+    return _with_rates(_fetch_active_projected(user_id), _fetch_rates())
 
 
 def _projected_for_month(costs: list[dict], year: int, month: int) -> Decimal:
@@ -95,32 +104,37 @@ async def get_dashboard_summary(
     first_day = date(year, month, 1)
     last_day  = date(year, month, calendar.monthrange(year, month)[1])
 
-    # ── Fetch expenses for the month ──────────────────────────────────────
-    exp_result = (
-        db()
-        .table("expenses")
-        .select("amount_mxn, category_id")
-        .eq("user_id", user_id)
-        .gte("date", first_day.isoformat())
-        .lte("date", last_day.isoformat())
-        .execute()
-    )
-
-    # ── Fetch earnings for the month ──────────────────────────────────────
-    # No exclusions needed — goal contributions are now expenses
+    # ── The month's movements and projected costs, fetched together ───────
+    # No exclusions on earnings — goal contributions are now expenses
     # not earnings, so all earnings count toward income
-    inc_result = (
-        db()
-        .table("earnings")
-        .select("amount_mxn")
-        .eq("user_id", user_id)
-        .gte("date", first_day.isoformat())
-        .lte("date", last_day.isoformat())
-        .execute()
-    )
+    def fetch_expenses():
+        return (
+            db()
+            .table("expenses")
+            .select("amount_mxn, category_id")
+            .eq("user_id", user_id)
+            .gte("date", first_day.isoformat())
+            .lte("date", last_day.isoformat())
+            .execute()
+        ).data or []
 
-    expenses = exp_result.data or []
-    earnings = inc_result.data or []
+    def fetch_earnings():
+        return (
+            db()
+            .table("earnings")
+            .select("amount_mxn")
+            .eq("user_id", user_id)
+            .gte("date", first_day.isoformat())
+            .lte("date", last_day.isoformat())
+            .execute()
+        ).data or []
+
+    expenses, earnings, projected_rows, currencies = await run_parallel(
+        fetch_expenses,
+        fetch_earnings,
+        lambda: _fetch_active_projected(user_id),
+        _fetch_rates,
+    )
 
     total_expenses = sum(
         Decimal(str(e["amount_mxn"])) for e in expenses
@@ -162,7 +176,7 @@ async def get_dashboard_summary(
     # One-time costs count in their own month, as /projected/monthly — the
     # dashboard card — has always counted them.
     projected_monthly = _projected_for_month(
-        _active_projected_costs(user_id), year, month
+        _with_rates(projected_rows, currencies), year, month
     )
 
     return {
@@ -849,13 +863,12 @@ async def get_year_over_year(
     """
     prev_year = year - 1
 
-    async def fetch_month(y: int, m: int) -> dict:
+    def amounts(table: str, y: int, m: int):
         first = date(y, m, 1)
         last  = date(y, m, calendar.monthrange(y, m)[1])
-
-        inc = (
+        return lambda: (
             db()
-            .table("earnings")
+            .table(table)
             .select("amount_mxn")
             .eq("user_id", user_id)
             .gte("date", first.isoformat())
@@ -863,16 +876,7 @@ async def get_year_over_year(
             .execute()
         ).data or []
 
-        exp = (
-            db()
-            .table("expenses")
-            .select("amount_mxn")
-            .eq("user_id", user_id)
-            .gte("date", first.isoformat())
-            .lte("date", last.isoformat())
-            .execute()
-        ).data or []
-
+    def totals(inc: list[dict], exp: list[dict]) -> dict:
         income   = Decimal("0") + sum(Decimal(str(e["amount_mxn"])) for e in inc)
         expenses = Decimal("0") + sum(Decimal(str(e["amount_mxn"])) for e in exp)
 
@@ -887,8 +891,15 @@ async def get_year_over_year(
             return Decimal("0")
         return round((current - previous) / previous * 100, 1)
 
-    current  = await fetch_month(year,      month)
-    previous = await fetch_month(prev_year, month)
+    # The four queries are independent (defect 37): run them together.
+    cur_inc, cur_exp, prev_inc, prev_exp = await run_parallel(
+        amounts("earnings", year,      month),
+        amounts("expenses", year,      month),
+        amounts("earnings", prev_year, month),
+        amounts("expenses", prev_year, month),
+    )
+    current  = totals(cur_inc,  cur_exp)
+    previous = totals(prev_inc, prev_exp)
 
     return {
         "current_year":    year,

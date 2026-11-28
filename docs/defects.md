@@ -722,6 +722,38 @@ would answer a query in a few milliseconds, so either the move did not take
 effect or the time is not spent on distance. Next: confirm the region in
 Railway and time each step on the server.
 
+**28/11, one connection pool (PR #38, `a93d285`) — partial.** Each request
+built its own HTTP client and opened its own TLS connection to the database
+before its first query. Now every request draws from one shared pool, with
+its own headers. Every response also carries `Server-Timing`, so the time
+inside the server can be told apart from the network. Measured from Juárez
+after the deploy, 30 calls each:
+
+| Endpoint | Total, mean | Server, mean | Server, p90 |
+|---|---|---|---|
+| `/health` (no database) | 152 ms | 1 ms | — |
+| `/currencies/` (one query) | 329 ms | 169 ms | 269 ms |
+| `/expenses/` | 377 ms | 224 ms | 249 ms |
+| `/analytics/year-over-year` (four queries) | 631 ms | 406 ms | 431 ms |
+| `/analytics/dashboard` | 678 ms | 513 ms | 568 ms |
+
+The yearly comparison went from about 610 to 406 ms on the server, but CP-11
+still fails: 631 ms seen from outside. About 80 ms per query is left, plus a
+fixed cost per request.
+
+**28/11, queries together (PR #44).** The services awaited the Supabase
+client, which is synchronous, so the four queries of the yearly comparison
+ran one after another and held the event loop meanwhile. They now run at the
+same time in worker threads (`run_parallel` in `app/database.py`): four in
+the yearly comparison; expenses, income, projected costs and rates in the
+Dashboard. Checked against production: 16 requests at once over the shared
+pool cost about what one does (165 against 135 ms), on a single HTTP/2
+connection. `Server-Timing` now also gives `client` (building the user's
+client) and `db` (time waiting on the database, and how many queries), so
+the fixed cost per request and the cost per query can be measured
+separately. While testing, the pool turned out to close if any client was
+used in a `with` block; that is fixed in the same PR.
+
 ---
 
 ## Smaller things, noted in passing
