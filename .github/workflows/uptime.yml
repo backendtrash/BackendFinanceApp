@@ -1,0 +1,39 @@
+name: uptime
+
+# Availability evidence (meta M5, RNF-04: 99% or more in production).
+#
+# Every 5 minutes, checks that the API answers /health and that the
+# frontend serves its page. Each run is one sample: a successful run means
+# both were up, a failed run means at least one was down. Each check
+# retries twice, 5 seconds apart, so a single dropped packet does not count
+# as downtime. scripts/disponibilidad.py turns the run history into a
+# percentage for a period.
+#
+# GitHub may start scheduled runs late or skip some under load; the
+# percentage is over the samples actually taken, and the script reports
+# how many there were.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  uptime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: API answers /health
+        run: |
+          curl -fsS --retry 2 --retry-delay 5 --retry-all-errors --max-time 20 \
+            -o /dev/null -w "API %{http_code} in %{time_total}s\n" \
+            https://backendfinanceapp-production.up.railway.app/health
+
+      - name: Frontend serves its page
+        run: |
+          curl -fsS --retry 2 --retry-delay 5 --retry-all-errors --max-time 20 \
+            -o /dev/null -w "Frontend %{http_code} in %{time_total}s\n" \
+            https://frontend-finance-app.vercel.app/
